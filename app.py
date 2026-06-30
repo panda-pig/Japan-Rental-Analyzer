@@ -434,6 +434,69 @@ def api_import_detail():
     })
 
 
+@app.route("/api/listings/<int:lid>/refresh", methods=["POST"])
+def api_listing_refresh(lid):
+    """重新抓取某房源(更新价格,写历史),重算评分。"""
+    from scrapers.base import fetch_html
+    from scripts.run_scrape import normalize, upsert_listing
+    from scripts.recalculate_scores import recalculate
+    from db_helper import get_conn
+
+    listing = query_one("SELECT * FROM rental_listings WHERE id=?", (lid,))
+    if not listing:
+        return jsonify({"error": "物件が見つかりません"}), 404
+
+    url = listing["detail_url"]
+    # 检查旧价格
+    old_cost = listing["total_monthly_cost"]
+
+    html = fetch_html(url)
+    if html is None:
+        return jsonify({"error": "ページの取得に失敗しました"}), 500
+
+    # 根据URL选择解析器
+    if "suumo.jp" in url:
+        from scrapers.suumo_detail import parse_suumo_detail
+        parser = parse_suumo_detail
+    elif "homes.co.jp" in url:
+        from scrapers.homes_detail import parse_homes_detail
+        parser = parse_homes_detail
+    elif "athome.jp" in url:
+        from scrapers.athome_detail import parse_athome_detail
+        parser = parse_athome_detail
+    elif "yahoo.co.jp" in url:
+        from scrapers.yahoo_detail import parse_yahoo_detail
+        parser = parse_yahoo_detail
+    else:
+        return jsonify({"error": "サポートされていないURL"}), 400
+
+    try:
+        raw = parser(html, url)
+    except Exception as e:
+        return jsonify({"error": f"解析エラー: {str(e)}"}), 500
+
+    conn = get_conn()
+    status, _ = upsert_listing(conn, normalize(raw))
+    conn.commit()
+    conn.close()
+
+    recalculate()
+
+    # 检查价格是否变化
+    new_listing = query_one("SELECT total_monthly_cost FROM rental_listings WHERE id=?", (lid,))
+    new_cost = new_listing["total_monthly_cost"] if new_listing else None
+    price_changed = old_cost != new_cost
+
+    return jsonify({
+        "ok": True,
+        "title": raw.title,
+        "old_cost": old_cost,
+        "new_cost": new_cost,
+        "price_changed": price_changed,
+        "message": f"「{raw.title}」を更新しました" + (f" 価格変動: {old_cost}→{new_cost}円" if price_changed else " 価格変動なし"),
+    })
+
+
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
     from scripts.run_scrape import run_scrape

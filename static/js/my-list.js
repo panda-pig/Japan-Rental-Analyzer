@@ -134,7 +134,7 @@ async function load() {
 }
 
 function renderCompareTable(rows) {
-  const headers = ['スコア', '物件名', 'プラットフォーム', 'エリア', '月額', '面積', '間取り', '階', '徒歩', '築年数', 'ペット', 'エリア平均', '偏差', 'ステータス', '原平台'];
+  const headers = ['スコア', '物件名', 'プラットフォーム', 'エリア', '月額', '面積', '間取り', '階', '徒歩', '築年数', 'ペット', 'エリア平均', '偏差', 'ステータス', '更新', '原平台'];
   document.querySelector('#compare-table thead tr').innerHTML = headers.map(h => `<th>${h}</th>`).join('');
   document.querySelector('#compare-table tbody').innerHTML = rows.map(l => {
     const dev = l.region_avg_rent && l.total_monthly_cost
@@ -155,6 +155,7 @@ function renderCompareTable(rows) {
       <td>${l.region_avg_rent ? l.region_avg_rent.toLocaleString() + '円' : '-'}</td>
       <td>${dev}</td>
       <td>${l.fav_status ? `<span class="tag accent">${l.fav_status}</span>` : '-'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="refreshListing(${l.id})">更新</button></td>
       <td><a href="${l.detail_url}" target="_blank" style="color:var(--accent);font-weight:600;">→</a></td>
     </tr>`;
   }).join('');
@@ -200,6 +201,18 @@ function renderPriceHistory(history) {
     yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: CHART.textMuted } },
     series,
   });
+}
+
+async function refreshListing(id) {
+  if (!confirm('価格を再取得しますか?')) return;
+  const res = await fetch(`/api/listings/${id}/refresh`, { method: 'POST' });
+  const d = await res.json();
+  if (d.error) {
+    alert(d.error);
+  } else {
+    alert(d.message);
+    load();  // 重新加载
+  }
 }
 
 load();
