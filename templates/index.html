@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="metric-grid" id="metrics"></div>
+<div class="card"><div id="chart-area-rent" class="chart"></div></div>
+<div class="card"><div id="chart-rent-dist" class="chart"></div></div>
+<div class="card"><div id="chart-scatter" class="chart"></div></div>
+<div class="card"><div id="chart-top10" class="chart"></div></div>
+<div class="card"><div id="chart-layout" class="chart"></div></div>
+<div class="card"><div id="chart-platform" class="chart"></div></div>
+<div class="card"><div id="chart-floor" class="chart"></div></div>
+<div class="card"><div id="chart-age" class="chart"></div></div>
+<div class="card"><div id="chart-status" class="chart"></div></div>
+<div class="card"><div id="chart-price-history" class="chart"></div></div>
+{% endblock %}
+{% block js %}dashboard.js{% endblock %}

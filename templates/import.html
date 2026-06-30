@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}データ取込{% endblock %}
+{% block content %}
+<div class="card"><h2>データソース</h2>
+<div id="source-list"></div>
+<button class="btn btn-primary" onclick="scrapeAll()">更新データ</button>
+<div id="scrape-result"></div></div>
+<details class="card"><summary>CSV取込(オプション)</summary>
+<input type="file" id="csv-file" accept=".csv"></details>
+{% endblock %}
+{% block js %}import.js{% endblock %}

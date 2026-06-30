@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+db/database.db
+.pytest_cache/
+data/*.csv
+tests/fixtures/*_real.html
+
+# PRD and design docs (not part of the project repo)
+tokyo_yokohama_rental_dashboard_prd.md
+docs/

@@ -1,0 +1,32 @@
+:root {
+  --bg: #F7F8FA; --card: #FFFFFF; --primary: #2C3E50; --accent: #3498DB;
+  --good: #27AE60; --warn: #E67E22; --bad: #C0392B; --tag: #8E44AD;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Hiragino Sans", sans-serif; background: var(--bg); color: #333; }
+.nav { background: var(--primary); padding: 12px 24px; display: flex; gap: 20px; }
+.nav a { color: #fff; text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.card { background: var(--card); border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #fff; }
+.badge.score { background: var(--good); }
+.badge.platform { background: var(--accent); }
+.tag { background: #eee; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-right: 4px; }
+.btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ghost { background: transparent; border: 1px solid #ccc; }
+.filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.filters label { font-size: 12px; color: #666; }
+.filters input, .filters select { padding: 4px; border: 1px solid #ddd; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.listing-card .price { font-size: 18px; font-weight: bold; color: var(--primary); }
+.listing-card .reason { color: var(--good); font-size: 12px; margin: 8px 0; }
+.over-budget { color: var(--warn); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.metric { background: var(--card); border-radius: 8px; padding: 16px; text-align: center; }
+.metric .num { font-size: 24px; font-weight: bold; color: var(--primary); }
+.metric .label { font-size: 12px; color: #888; }
+.chart { height: 300px; margin-bottom: 16px; }

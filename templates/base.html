@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Dashboard{% endblock %}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head><body>
+<nav class="nav">
+  <a href="/">Dashboard</a><a href="/listings">物件一覧</a>
+  <a href="/rankings">ランキング</a><a href="/favorites">お気に入り</a>
+  <a href="/compare">比較</a><a href="/import">データ取込</a>
+  <a href="/settings">設定</a>
+</nav>
+<div class="container">{% block content %}{% endblock %}</div>
+<script src="/static/js/{% block js %}{% endblock %}"></script>
+</body></html>

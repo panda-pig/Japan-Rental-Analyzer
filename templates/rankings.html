@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}ランキング{% endblock %}
+{% block content %}
+<div class="card"><h2>推薦ランキング</h2>
+<table id="rank-table"><thead><tr>
+<th>順位</th><th>推薦分</th><th>物件名</th><th>エリア</th><th>月額</th>
+<th>面積</th><th>間取り</th><th>階</th><th>ペット</th><th>理由</th><th></th>
+</tr></thead><tbody></tbody></table></div>
+{% endblock %}
+{% block js %}rankings.js{% endblock %}
