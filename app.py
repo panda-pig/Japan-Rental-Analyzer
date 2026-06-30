@@ -5,11 +5,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scripts.init_db import init_db
+from scripts.seed_regions import seed_regions
 
 app = Flask(__name__)
 
-# 启动时自动建表(幂等,首次部署或磁盘重置后生效)
+# 启动时自动建表 + 投入区域基准(幂等,首次部署或磁盘重置后生效)
 init_db()
+# 如果 region_stats 为空才 seed(避免每次启动覆盖)
+from db_helper import query_one
+if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
+    seed_regions()
 
 
 # ===== Pages =====
