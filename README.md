@@ -122,6 +122,16 @@ python app.py
 - 商用再配布しない
 - 各プラットフォームの利用規約を遵守してください
 
+### Render へのデプロイ
+
+1. Render で New → Web Service → GitHub リポジトリを接続
+2. ビルドコマンド: `pip install -r requirements.txt`
+3. 起動コマンド: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`（Procfile から自動読み取り）
+4. Persistent Disk 追加: 1GB / Mount Path `db`
+5. 環境変数 `DB_PATH` = `/opt/render/project/src/db/database.db` を設定
+6. オプション: `NAVITIME_CLIENT_KEY` を設定（未設定時は通勤分を自動降格）
+7. デプロイ実行 → 公開URL（`https://xxx.onrender.com`）でアクセス可能
+
 ---
 
 ## 中文版
@@ -235,6 +245,16 @@ python app.py
 - 不保存联系方式等个人信息
 - 不做商业再发布
 - 请遵守各平台的使用条款
+
+### 部署到 Render
+
+1. 在 Render 上 New → Web Service → 连接 GitHub 仓库
+2. 构建命令: `pip install -r requirements.txt`
+3. 启动命令: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`（Procfile 自动读取）
+4. 添加 Persistent Disk: 1GB / Mount Path `db`
+5. 环境变量 `DB_PATH` = `/opt/render/project/src/db/database.db`
+6. 可选: `NAVITIME_CLIENT_KEY`（未设置时通勤分自动降级）
+7. 部署后通过公开URL（`https://xxx.onrender.com`）访问
 
 ---
 

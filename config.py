@@ -6,7 +6,7 @@ load_dotenv()
 NAVITIME_CLIENT_KEY = os.getenv("NAVITIME_CLIENT_KEY", "")
 NAVITIME_ENABLED = bool(NAVITIME_CLIENT_KEY)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "db", "database.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "db", "database.db"))
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 
 # 初期费用估算默认系数(设置页可改,存 user_preferences)
