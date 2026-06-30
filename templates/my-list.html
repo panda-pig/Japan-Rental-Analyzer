@@ -1,7 +1,19 @@
 {% extends "base.html" %}
 {% block title %}マイリスト分析{% endblock %}
 {% block content %}
-<h1 class="page-title">マイリスト分析</h1>
+<h1 class="page-title">物件分析</h1>
+
+<!-- URL输入框 -->
+<div class="card" style="margin-bottom:24px;">
+  <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+    物件詳細ページのURLを貼り付けてください。自動で解析し、エリア平均と比較します。
+  </p>
+  <div style="display:flex;gap:8px;">
+    <input type="text" id="import-url" placeholder="https://suumo.jp/chintai/jnc_xxxxx/ または https://www.homes.co.jp/chintai/room/..." style="flex:1;">
+    <button class="btn btn-primary" onclick="importAndAnalyze()">解析</button>
+  </div>
+  <div id="import-result" style="margin-top:12px;font-size:13px;"></div>
+</div>
 
 <!-- 指标卡 -->
 <div class="metric-grid" id="my-metrics"></div>
@@ -24,7 +36,7 @@
   <div id="chart-deviation" class="chart"></div>
 </div>
 
-<!-- 自动对比表 -->
+<!-- 全物件比較表 -->
 <div class="card" style="padding:0; overflow:hidden;">
   <h2 style="padding:24px 24px 0;">全物件比較表</h2>
   <div style="overflow-x:auto;">

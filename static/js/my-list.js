@@ -1,3 +1,34 @@
+// URL导入 + 分析一体化
+async function importAndAnalyze() {
+  const url = document.getElementById('import-url').value.trim();
+  const el = document.getElementById('import-result');
+  if (!url) { el.innerHTML = '<span style="color:var(--bad);">URLを入力してください</span>'; return; }
+  el.textContent = '解析中... (数秒かかります)';
+  try {
+    const res = await fetch('/api/import/detail', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const d = await res.json();
+    if (d.error) {
+      el.innerHTML = `<span style="color:var(--bad);">${d.error}</span>`;
+    } else {
+      el.innerHTML = `<span style="color:var(--good);font-weight:600;">${d.message}</span> \
+        <span style="color:var(--text-muted);margin-left:8px;">スコア分析を更新しました</span>`;
+      document.getElementById('import-url').value = '';
+      load();  // 重新加载分析图表
+    }
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--bad);">通信エラー</span>';
+  }
+}
+
+// 回车也能触发
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('import-url');
+  if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') importAndAnalyze(); });
+});
+
 const CHART = {
   primary: '#2563EB', primaryLight: '#3B82F6',
   good: '#059669', warn: '#D97706', bad: '#DC2626',
