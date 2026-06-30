@@ -20,6 +20,7 @@ if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
 def _score_single(listing_id):
     """只给一条房源评分(避免全量重算超时)。"""
     import sqlite3
+    from config import DB_PATH
     from core.scoring import calculate_scores, ScoreInput, Weights
     from core.commute import get_commute_minutes
     from datetime import datetime
