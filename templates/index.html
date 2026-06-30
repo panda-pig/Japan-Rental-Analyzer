@@ -1,47 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<h1 class="page-title">エリア分析ダッシュボード</h1>
+<h1 class="page-title">エリアデータダッシュボード</h1>
 
 <!-- 指标卡 -->
 <div class="metric-grid" id="metrics"></div>
 
-<!-- 区域平均租金 -->
+<!-- 东京23区平均租金 -->
 <div class="card">
-  <h2>東京都23区 平均賃料</h2>
+  <h2>東京都23区 平均賃料(1LDK)</h2>
   <div id="chart-tokyo-rent" class="chart"></div>
 </div>
 
+<!-- 横浜各区平均租金 -->
 <div class="card">
-  <h2>横浜市各区 平均賃料</h2>
+  <h2>横浜市各区 平均賃料(1LDK)</h2>
   <div id="chart-yokohama-rent" class="chart"></div>
 </div>
 
-<!-- 区域口碑雷达 -->
+<!-- 区域宜居度雷达 -->
 <div class="card">
-  <h2>エリア評価 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">安全性・便利度・環境</span></h2>
-  <select id="region-selector" onchange="renderRegionRadar()" style="margin-bottom:12px;">
-    <option value="">エリアを選択...</option>
-  </select>
+  <h2>エリア宜居度 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">安全性・便利度・環境・賃料</span></h2>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+    <select id="region-selector-1" onchange="renderRegionRadar()"></select>
+    <select id="region-selector-2" onchange="renderRegionRadar()"></select>
+  </div>
   <div id="chart-region-radar" class="chart"></div>
-</div>
-
-<!-- 用户导入物件 vs 区域均价 -->
-<div class="card">
-  <h2>インポート物件 vs エリア平均 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">点線がエリア平均</span></h2>
-  <div id="chart-user-scatter" class="chart"></div>
-</div>
-
-<!-- 用户导入物件区域分布 -->
-<div class="card">
-  <h2>インポート物件のエリア分布</h2>
-  <div id="chart-user-ward" class="chart"></div>
-</div>
-
-<!-- 平台来源 -->
-<div class="card">
-  <h2>プラットフォーム別 内訳</h2>
-  <div id="chart-platform" class="chart"></div>
 </div>
 {% endblock %}
 {% block js %}dashboard.js{% endblock %}

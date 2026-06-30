@@ -24,19 +24,9 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/listings")
-def page_listings():
-    return render_template("listings.html")
-
-
 @app.route("/my-list")
 def page_my_list():
     return render_template("my-list.html")
-
-
-@app.route("/rankings")
-def page_rankings():
-    return render_template("rankings.html")
 
 
 @app.route("/favorites")

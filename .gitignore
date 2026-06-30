@@ -10,3 +10,6 @@ tests/fixtures/*_real.html
 # PRD and design docs (not part of the project repo)
 tokyo_yokohama_rental_dashboard_prd.md
 docs/
+
+# AI agent local docs (not for GitHub)
+AGENT.md
