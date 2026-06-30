@@ -40,8 +40,9 @@ async function save() {
 
 async function recalc() {
   await save();
+  alert("スコアを再計算しています...");
   await fetch("/api/scores/recalculate", { method: "POST" });
-  alert("再計算しました");
+  alert("再計算が完了しました");
 }
 
 load();

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}物件一覧{% endblock %}
 {% block content %}
+<h1 class="page-title">物件一覧</h1>
 <div class="card filters" id="filters">
   <div><label>月額上限</label><input type="number" id="f_max_cost" placeholder="140000"></div>
   <div><label>面積下限</label><input type="number" id="f_min_area" placeholder="35"></div>
@@ -14,9 +15,11 @@
     <option value="area_desc">面積広順</option><option value="walk_asc">徒歩近順</option>
     <option value="age_asc">築浅順</option><option value="newest">新着順</option>
   </select></div>
-  <div style="align-self:end"><button class="btn btn-primary" onclick="loadListings()">検索</button>
-  <button class="btn btn-ghost" onclick="toggleView()">表示切替</button></div>
+  <div style="flex-direction:row; align-items:flex-end; gap:8px;">
+    <button class="btn btn-primary" onclick="loadListings()">検索</button>
+    <button class="btn btn-ghost" onclick="toggleView()">表示切替</button>
+  </div>
 </div>
-<div id="results" class="grid"></div>
+<div id="results" class="grid" style="margin-top:20px;"></div>
 {% endblock %}
 {% block js %}listings.js{% endblock %}

@@ -1,11 +1,21 @@
 {% extends "base.html" %}
 {% block title %}データ取込{% endblock %}
 {% block content %}
-<div class="card"><h2>データソース</h2>
-<div id="source-list"></div>
-<button class="btn btn-primary" onclick="scrapeAll()">更新データ</button>
-<div id="scrape-result"></div></div>
-<details class="card"><summary>CSV取込(オプション)</summary>
-<input type="file" id="csv-file" accept=".csv"></details>
+<h1 class="page-title">データ取込</h1>
+<div class="card">
+  <h2>データソース</h2>
+  <div id="source-list" style="margin-bottom:16px;"></div>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:16px;">
+    <button class="btn btn-primary" onclick="scrapeAll()">データを更新</button>
+    <span id="scrape-result" style="font-size:13px;color:var(--text-secondary);"></span>
+  </div>
+</div>
+<details>
+  <summary>CSV取込(オプション)</summary>
+  <div style="margin-top:12px;">
+    <input type="file" id="csv-file" accept=".csv" style="padding:8px;">
+    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">CSV取込は現在オプション機能です。</p>
+  </div>
+</details>
 {% endblock %}
 {% block js %}import.js{% endblock %}

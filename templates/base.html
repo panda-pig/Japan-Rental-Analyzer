@@ -1,15 +1,32 @@
-<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Dashboard{% endblock %}</title>
+<title>{% block title %}Dashboard{% endblock %} - Rental Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-</head><body>
+</head>
+<body>
 <nav class="nav">
-  <a href="/">Dashboard</a><a href="/listings">物件一覧</a>
-  <a href="/rankings">ランキング</a><a href="/favorites">お気に入り</a>
-  <a href="/compare">比較</a><a href="/import">データ取込</a>
-  <a href="/settings">設定</a>
+  <div class="nav-brand">
+    <span class="nav-brand-icon">R</span>
+    <span>Rental Intelligence</span>
+  </div>
+  <a class="nav-link" href="/">Dashboard</a>
+  <a class="nav-link" href="/listings">物件一覧</a>
+  <a class="nav-link" href="/rankings">ランキング</a>
+  <a class="nav-link" href="/favorites">お気に入り</a>
+  <a class="nav-link" href="/compare">比較</a>
+  <a class="nav-link" href="/import">データ取込</a>
+  <a class="nav-link" href="/settings">設定</a>
 </nav>
-<div class="container">{% block content %}{% endblock %}</div>
+<div class="container">
+{% block content %}{% endblock %}
+</div>
 <script src="/static/js/{% block js %}{% endblock %}"></script>
-</body></html>
+</body>
+</html>

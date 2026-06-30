@@ -1,16 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
+<h1 class="page-title">ダッシュボード</h1>
 <div class="metric-grid" id="metrics"></div>
-<div class="card"><div id="chart-area-rent" class="chart"></div></div>
-<div class="card"><div id="chart-rent-dist" class="chart"></div></div>
-<div class="card"><div id="chart-scatter" class="chart"></div></div>
-<div class="card"><div id="chart-top10" class="chart"></div></div>
-<div class="card"><div id="chart-layout" class="chart"></div></div>
-<div class="card"><div id="chart-platform" class="chart"></div></div>
-<div class="card"><div id="chart-floor" class="chart"></div></div>
-<div class="card"><div id="chart-age" class="chart"></div></div>
-<div class="card"><div id="chart-status" class="chart"></div></div>
-<div class="card"><div id="chart-price-history" class="chart"></div></div>
+<div class="card"><h2>エリア別平均月額</h2><div id="chart-area-rent" class="chart"></div></div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+  <div class="card"><h2>家賃分布</h2><div id="chart-rent-dist" class="chart"></div></div>
+  <div class="card"><h2>階数分布</h2><div id="chart-floor" class="chart"></div></div>
+</div>
+<div class="card"><h2>面積 vs 月額 散布図</h2><div id="chart-scatter" class="chart"></div></div>
+<div class="card"><h2>推薦スコア Top 10</h2><div id="chart-top10" class="chart"></div></div>
+<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+  <div class="card"><h2>間取り比率</h2><div id="chart-layout" class="chart"></div></div>
+  <div class="card"><h2>プラットフォーム比率</h2><div id="chart-platform" class="chart"></div></div>
+  <div class="card"><h2>ステータス分布</h2><div id="chart-status" class="chart"></div></div>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+  <div class="card"><h2>築年数分布</h2><div id="chart-age" class="chart"></div></div>
+  <div class="card"><h2>価格履歴</h2><div id="chart-price-history" class="chart"></div></div>
+</div>
 {% endblock %}
 {% block js %}dashboard.js{% endblock %}
