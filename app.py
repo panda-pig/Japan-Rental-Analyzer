@@ -17,6 +17,47 @@ if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
     seed_regions()
 
 
+def _score_single(listing_id):
+    """只给一条房源评分(避免全量重算超时)。"""
+    import sqlite3
+    from core.scoring import calculate_scores, ScoreInput, Weights
+    from core.commute import get_commute_minutes
+    from datetime import datetime
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    pref = conn.execute("SELECT * FROM user_preferences WHERE id=1").fetchone()
+    l = conn.execute("SELECT * FROM rental_listings WHERE id=?", (listing_id,)).fetchone()
+    if not l:
+        conn.close()
+        return
+    w = Weights(budget=pref["budget_weight"], area=pref["area_weight"],
+        commute=pref["commute_weight"], floor=pref["floor_weight"],
+        pet=pref["pet_weight"], station=pref["station_weight"],
+        age=pref["age_weight"], initial_cost=pref["initial_cost_weight"])
+    commute_minutes = None
+    if pref["target_station"] and l["nearest_station"]:
+        commute_minutes = get_commute_minutes(l["nearest_station"], pref["target_station"])
+    inp = ScoreInput(total_monthly_cost=l["total_monthly_cost"], area_m2=l["area_m2"],
+        floor=l["floor"], pet_allowed=l["pet_allowed"], walk_minutes=l["walk_minutes"],
+        building_age=l["building_age"], deposit=l["deposit"], key_money=l["key_money"], rent=l["rent"])
+    r = calculate_scores(inp, w, max_cost=pref["max_total_monthly_cost"],
+        ideal_area=pref["ideal_area_m2"], min_floor=pref["min_floor"],
+        max_walk=pref["max_walk_minutes"], max_age=pref["max_building_age"],
+        broker_rate=pref["broker_fee_rate"], prepaid=pref["prepaid_rent_months"],
+        misc=pref["misc_cost"], commute_minutes=commute_minutes)
+    conn.execute("DELETE FROM listing_scores WHERE listing_id=?", (listing_id,))
+    conn.execute("""INSERT INTO listing_scores
+        (listing_id, budget_score, area_score, commute_score, floor_score, pet_score,
+         station_score, age_score, initial_cost_score, feature_score, total_score,
+         score_reason, commute_minutes, commute_resolved, calculated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (listing_id, r.budget_score, r.area_score, r.commute_score, r.floor_score,
+         r.pet_score, r.station_score, r.age_score, r.initial_cost_score, r.feature_score,
+         r.total_score, r.score_reason, commute_minutes, r.commute_resolved, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+
 # ===== Pages =====
 
 @app.route("/")
@@ -419,8 +460,8 @@ def api_import_detail():
     conn.commit()
     conn.close()
 
-    # 评分
-    recalculate()
+    # 只算这一条(不重算全部,避免超时)
+    _score_single(listing_id)
 
     return jsonify({
         "status": status,
