@@ -1,4 +1,4 @@
-// URL导入 + 分析一体化
+// URL导入 + 单套房源分析
 async function importAndAnalyze() {
   const url = document.getElementById('import-url').value.trim();
   const el = document.getElementById('import-result');
@@ -25,234 +25,230 @@ async function importAndAnalyze() {
     } else {
       el.innerHTML = '<span style="color:var(--good);font-weight:600;">' + d.message + '</span>';
       document.getElementById('import-url').value = '';
-      load();
+      loadAnalysis();  // 加载分析报告
     }
   } catch (e) {
     el.innerHTML = '<span style="color:var(--bad);">通信エラー: ' + e.message + '</span>';
   }
 }
 
-// 回车也能触发
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('import-url');
   if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') importAndAnalyze(); });
 });
 
-const CHART = {
-  primary: '#2563EB', primaryLight: '#3B82F6',
-  good: '#059669', warn: '#D97706', bad: '#DC2626',
-  text: '#5A6B7E', textMuted: '#8B9AAA', border: '#E4E8EC',
-  palette: ['#2563EB', '#059669', '#D97706', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1', '#F43F5E'],
-};
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const BASE_OPTION = {
-  textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 12 },
-  tooltip: {
-    backgroundColor: '#FFFFFF', borderColor: CHART.border, borderWidth: 1,
+const COLORS = { primary: '#2563EB', good: '#059669', warn: '#D97706', bad: '#DC2626', text: '#5A6B7E', muted: '#8B9AAA', border: '#E4E8EC',
+  palette: ['#2563EB', '#059669', '#D97706', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1', '#F43F5E'] };
+const BASE_OPT = {
+  textStyle: { fontFamily: CHART_FONT, color: COLORS.text, fontSize: 12 },
+  tooltip: { backgroundColor: '#FFFFFF', borderColor: COLORS.border, borderWidth: 1,
     textStyle: { fontFamily: CHART_FONT, color: '#1A2332', fontSize: 12 },
-    extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;',
-  },
-  grid: { top: 30, right: 20, bottom: 30, left: 50, containLabel: true },
+    extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;' },
 };
 
-function scatterWithBaseline(id, data) {
-  const el = document.getElementById(id); if (!el) return;
-  // 按区域分组基准线
-  const wardAvgs = {};
-  data.forEach(d => { if (d.region_avg && d.ward) wardAvgs[d.ward] = d.region_avg; });
-  const markLines = Object.entries(wardAvgs).map(([ward, avg]) => ({
-    yAxis: avg, lineStyle: { type: 'dashed', color: CHART.warn, opacity: 0.5 },
-    label: { formatter: `${ward} ${avg.toLocaleString()}`, fontSize: 10, color: CHART.warn },
-  }));
-  const ch = echarts.init(el);
-  ch.setOption({
-    ...BASE_OPTION,
-    xAxis: { name: '面積(㎡)', type: 'value', splitLine: { lineStyle: { color: CHART.border } }, axisLabel: { color: CHART.textMuted } },
-    yAxis: { name: '月額(円)', type: 'value', splitLine: { lineStyle: { color: CHART.border } }, axisLabel: { color: CHART.textMuted } },
-    tooltip: { trigger: 'item', formatter: p => `${p.data[2]}<br/>${p.data[0]}㎡ / ${p.data[1].toLocaleString()}円` },
-    series: [{ type: 'scatter', symbolSize: 10,
-      data: data.map(x => [x.x, x.y, x.name || '']),
-      itemStyle: { color: CHART.primary, opacity: 0.7 },
-      markLine: { data: markLines, symbol: 'none', animation: false, silent: true },
-    }],
-  });
-}
-
-function radar(id, indicators, series) {
-  const el = document.getElementById(id); if (!el) return;
-  const ch = echarts.init(el);
-  ch.setOption({
-    ...BASE_OPTION,
-    legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 11 } },
-    radar: {
-      indicator: indicators,
-      shape: 'polygon', radius: '65%',
-      splitArea: { areaStyle: { color: ['rgba(37,99,235,0.02)', 'rgba(37,99,235,0.04)', 'rgba(37,99,235,0.06)'] } },
-      axisName: { color: CHART.text, fontFamily: CHART_FONT, fontSize: 11 },
-    },
-    series: [{
-      type: 'radar', data: series.map((s, i) => ({
-        value: s.value, name: s.name,
-        itemStyle: { color: CHART.palette[i % CHART.palette.length] },
-        areaStyle: { opacity: 0.08 },
-        lineStyle: { width: 2 },
-      })),
-    }],
-  });
-}
-
-function deviationBar(id, data) {
-  const el = document.getElementById(id); if (!el) return;
-  const ch = echarts.init(el);
-  ch.setOption({
-    ...BASE_OPTION,
-    xAxis: { type: 'value', splitLine: { lineStyle: { color: CHART.border } }, axisLabel: { color: CHART.textMuted, formatter: '{value}%' } },
-    yAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { color: CHART.text, fontSize: 11 }, axisLine: { lineStyle: { color: CHART.border } } },
-    series: [{
-      type: 'bar',
-      data: data.map(d => ({
-        value: d.deviation_pct,
-        itemStyle: { color: d.deviation_pct > 0 ? CHART.bad : CHART.good },
-      })),
-      barMaxWidth: 25,
-      markLine: { data: [{ xAxis: 0 }], symbol: 'none', lineStyle: { type: 'solid', color: CHART.textMuted }, animation: false, silent: true },
-    }],
-    tooltip: { trigger: 'item', formatter: p => {
-      const d = data[p.dataIndex];
-      return `${d.name}<br/>${d.ward}: ${(d.total_monthly_cost||0).toLocaleString()}円 vs ${(d.region_avg_rent||0).toLocaleString()}円<br/>偏差: ${d.deviation_pct}%`;
-    }},
-  });
-}
-
-async function load() {
+async function loadAnalysis() {
   const res = await fetch('/api/my-list');
   const d = await res.json();
+  const container = document.getElementById('analysis-container');
 
-  // 指标卡
-  const metrics = [
-    { label: '物件数', value: d.total, cls: '' },
-    { label: '予算内', value: d.budget_match, cls: 'good' },
-    { label: '平均月額', value: (d.avg_cost || 0).toLocaleString() + '円', cls: '' },
-    { label: '平均スコア', value: d.avg_score, cls: 'accent' },
-    { label: '未問合せ', value: d.uncontacted, cls: 'warn' },
+  if (!d.total) {
+    container.innerHTML = '<div class="empty-state">物件をインポートすると分析が表示されます。</div>';
+    return;
+  }
+
+  // 找最新导入的房源(取第一条,即最高分的)
+  const latest = d.compare_rows[0];
+  if (!latest) {
+    container.innerHTML = '<div class="empty-state">物件が見つかりません。</div>';
+    return;
+  }
+
+  // 获取该房源所在区域的基准
+  let region = null;
+  if (latest.ward) {
+    try {
+      const rres = await fetch('/api/regions/' + encodeURIComponent(latest.ward));
+      if (rres.ok) region = await rres.json();
+    } catch(e) {}
+  }
+
+  renderReport(latest, region, d);
+}
+
+function renderReport(listing, region, allData) {
+  const c = document.getElementById('analysis-container');
+
+  // 房源详情 + 区域对比表
+  const rows = [
+    ['物件名', listing.title, '-'],
+    ['プラットフォーム', `<span class="badge platform">${listing.platform}</span>`, '-'],
+    ['スコア', `<span class="badge score">${listing.total_score || '-'}</span>`, '-'],
+    ['月額', `${(listing.total_monthly_cost || 0).toLocaleString()}円`, region ? `${region.avg_rent.toLocaleString()}円` : '-'],
+    ['家賃', `${(listing.rent || 0).toLocaleString()}円`, '-'],
+    ['管理費', `${(listing.management_fee || 0).toLocaleString()}円`, '-'],
+    ['面積', `${listing.area_m2 || '?'}㎡`, region ? `${region.avg_area}㎡` : '-'],
+    ['間取り', listing.layout || '-', '-'],
+    ['階数', `${listing.floor || '?'}階`, '-'],
+    ['築年数', `築${listing.building_age || '?'}年`, region ? `築${region.avg_building_age}年` : '-'],
+    ['徒歩', `${listing.walk_minutes || '?'}分`, '-'],
+    ['敷金', `${(listing.deposit || 0).toLocaleString()}円`, '-'],
+    ['礼金', `${(listing.key_money || 0).toLocaleString()}円`, '-'],
+    ['初期費用', `${(listing.initial_cost_estimate || 0).toLocaleString()}円`, '-'],
+    ['平米単価', `${listing.price_per_m2 ? Math.round(listing.price_per_m2).toLocaleString() + '円' : '-'}`, '-'],
+    ['ペット', listing.pet_allowed ? '<span class="tag good">可</span>' : '不可', '-'],
   ];
-  document.getElementById('my-metrics').innerHTML = metrics.map(m =>
-    `<div class="metric ${m.cls}"><div class="num">${m.value ?? 0}</div><div class="label">${m.label}</div></div>`).join('');
 
-  // 散点
-  if (d.scatter_data && d.scatter_data.length) {
-    scatterWithBaseline('chart-scatter', d.scatter_data);
-  } else {
-    document.getElementById('chart-scatter').className = 'chart-empty';
-    document.getElementById('chart-scatter').innerHTML = '物件をインポートすると表示されます';
+  // 偏差计算
+  let deviationText = '-';
+  if (region && listing.total_monthly_cost && region.avg_rent) {
+    const diff = listing.total_monthly_cost - region.avg_rent;
+    const pct = Math.round(diff / region.avg_rent * 100);
+    const color = diff > 0 ? COLORS.bad : COLORS.good;
+    deviationText = `<span style="color:${color};font-weight:600;">${diff > 0 ? '+' : ''}${diff.toLocaleString()}円 (${pct}%)</span>`;
+  }
+  rows.push(['エリア平均との偏差', deviationText, '-']);
+
+  // 安全性/便利度/環境
+  if (region) {
+    rows.push(['エリア安全性', region.safety_level, '-']);
+    rows.push(['エリア便利度', region.convenience_level, '-']);
+    rows.push(['エリア環境', region.environment_level, '-']);
   }
 
-  // 雷达
-  if (d.radar_series && d.radar_series.length) {
-    radar('chart-radar', d.radar_indicators, d.radar_series);
-  } else {
-    document.getElementById('chart-radar').className = 'chart-empty';
-    document.getElementById('chart-radar').innerHTML = '物件をインポートすると表示されます';
-  }
+  let html = `
+    <div class="card" style="margin-top:20px;">
+      <h2>物件詳細レポート</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+        ${listing.ward || '地域不明'} の物件解析結果。
+        ${region ? `エリア平均(${listing.ward})と比較しています。` : 'このエリアの基準データがありません。'}
+      </p>
+      <table style="width:100%;">
+        <thead><tr><th>項目</th><th>この物件</th><th>エリア平均</th></tr></thead>
+        <tbody>
+          ${rows.map(r => `<tr><td style="font-weight:600;color:var(--text-primary);">${r[0]}</td><td>${r[1]}</td><td style="color:var(--text-muted);">${r[2]}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 
-  // 偏差
-  if (d.deviations && d.deviations.length) {
-    deviationBar('chart-deviation', d.deviations);
-  } else {
-    document.getElementById('chart-deviation').className = 'chart-empty';
-    document.getElementById('chart-deviation').innerHTML = '物件をインポートすると表示されます';
-  }
+  // 评分雷达(这一套的8维度)
+  if (listing.total_score != null) {
+    html += `
+    <div class="card">
+      <h2>スコアレーダー <span style="font-size:12px;font-weight:400;color:var(--text-muted);">8次元評価</span></h2>
+      <div id="chart-radar-single" class="chart"></div>
+    </div>`;
 
-  // 对比表
-  renderCompareTable(d.compare_rows || []);
+    // 偏差柱状图
+    if (region && listing.total_monthly_cost) {
+      html += `
+      <div class="card">
+        <h2>エリア平均との比較</h2>
+        <div id="chart-compare-bar" class="chart"></div>
+      </div>`;
+    }
 
-  // 状态进度
-  renderStatusProgress(d.status_progress || []);
-
-  // 价格历史
-  renderPriceHistory(d.price_history || []);
-}
-
-function renderCompareTable(rows) {
-  const headers = ['スコア', '物件名', 'プラットフォーム', 'エリア', '月額', '面積', '間取り', '階', '徒歩', '築年数', 'ペット', 'エリア平均', '偏差', 'ステータス', '更新', '原平台'];
-  document.querySelector('#compare-table thead tr').innerHTML = headers.map(h => `<th>${h}</th>`).join('');
-  document.querySelector('#compare-table tbody').innerHTML = rows.map(l => {
-    const dev = l.region_avg_rent && l.total_monthly_cost
-      ? `<span style="color:${l.total_monthly_cost > l.region_avg_rent ? 'var(--bad)' : 'var(--good)'};font-weight:600;">${Math.round((l.total_monthly_cost - l.region_avg_rent) / l.region_avg_rent * 100)}%</span>`
-      : '-';
-    return `<tr>
-      <td><span class="badge score">${l.total_score || '-'}</span></td>
-      <td style="font-weight:600;color:var(--text-primary);">${l.title || ''}</td>
-      <td><span class="badge platform">${l.platform || ''}</span></td>
-      <td>${l.ward || '-'}</td>
-      <td>${(l.total_monthly_cost || 0).toLocaleString()}円</td>
-      <td>${l.area_m2 || '?'}㎡</td>
-      <td>${l.layout || '-'}</td>
-      <td>${l.floor || '?'}階</td>
-      <td>${l.walk_minutes || '?'}分</td>
-      <td>築${l.building_age || '?'}年</td>
-      <td>${l.pet_allowed ? '<span class="tag good">可</span>' : '-'}</td>
-      <td>${l.region_avg_rent ? l.region_avg_rent.toLocaleString() + '円' : '-'}</td>
-      <td>${dev}</td>
-      <td>${l.fav_status ? `<span class="tag accent">${l.fav_status}</span>` : '-'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="refreshListing(${l.id})">更新</button></td>
-      <td><a href="${l.detail_url}" target="_blank" style="color:var(--accent);font-weight:600;">→</a></td>
-    </tr>`;
-  }).join('');
-}
-
-function renderStatusProgress(progress) {
-  const el = document.getElementById('status-progress');
-  const total = progress.reduce((s, p) => s + p.value, 0);
-  if (!total) {
-    el.innerHTML = '<div class="empty-state">まだ物件がインポートされていません。</div>';
-    return;
-  }
-  const colors = ['var(--accent)', 'var(--good)', 'var(--warn)', 'var(--bad)'];
-  el.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap;">${progress.map((p, i) =>
-    `<div style="flex:1;min-width:120px;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${p.name || '未設定'} <span style="color:var(--text-muted);">(${p.value})</span></div>
-      <div style="height:8px;background:var(--bg-alt);border-radius:4px;overflow:hidden;">
-        <div style="width:${p.value / total * 100}%;height:100%;background:${colors[i % colors.length]};border-radius:4px;"></div>
+    // 推荐理由
+    html += `
+    <div class="card">
+      <h2>推薦理由</h2>
+      <div style="background:var(--good-bg);border:1px solid var(--good-border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--good);">
+        ${listing.score_reason || 'スコア理由がありません'}
       </div>
-    </div>`).join('')}</div>`;
-}
-
-function renderPriceHistory(history) {
-  const el = document.getElementById('chart-price-history');
-  if (!history || !history.length) {
-    el.className = 'chart-empty';
-    el.innerHTML = '価格履歴は複数回取得後に表示されます';
-    return;
+    </div>`;
   }
-  // 按 listing 分组
-  const groups = {};
-  history.forEach(h => { if (!groups[h.id]) groups[h.id] = { name: h.title, dates: [], costs: [] }; groups[h.id].dates.push(h.checked_at); groups[h.id].costs.push(h.total_monthly_cost); });
-  const series = Object.values(groups).map((g, i) => ({
-    name: g.name ? g.name.substring(0, 20) : '?', type: 'line', smooth: true,
-    data: g.costs, itemStyle: { color: CHART.palette[i % CHART.palette.length] },
-  }));
-  const dates = Object.values(groups)[0]?.dates || [];
-  const ch = echarts.init(el);
-  ch.setOption({
-    ...BASE_OPTION,
-    legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 11 } },
-    xAxis: { type: 'category', data: dates, axisLabel: { color: CHART.textMuted } },
-    yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: CHART.textMuted } },
-    series,
-  });
-}
 
-async function refreshListing(id) {
-  if (!confirm('価格を再取得しますか?')) return;
-  const res = await fetch(`/api/listings/${id}/refresh`, { method: 'POST' });
-  const d = await res.json();
-  if (d.error) {
-    alert(d.error);
-  } else {
-    alert(d.message);
-    load();  // 重新加载
+  // 如果有多套导入的房源,显示全部列表
+  if (allData.total > 1) {
+    html += `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <h2 style="padding:24px 24px 0;">インポート済み物件 (${allData.total}件)</h2>
+      <div style="overflow-x:auto;">
+        <table id="all-listings-table">
+          <thead><tr><th>スコア</th><th>物件名</th><th>エリア</th><th>月額</th><th>面積</th><th>偏差</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  c.innerHTML = html;
+
+  // 渲染雷达图
+  if (listing.total_score != null) {
+    const el = document.getElementById('chart-radar-single');
+    if (el) {
+      const ch = echarts.init(el);
+      ch.setOption({
+        ...BASE_OPT,
+        radar: {
+          indicator: [
+            { name: '予算', max: 20 }, { name: '面積', max: 15 },
+            { name: '通勤', max: 15 }, { name: '階数', max: 10 },
+            { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
+            { name: '築年数', max: 10 }, { name: '初期費用', max: 5 },
+          ],
+          shape: 'polygon', radius: '65%',
+          axisName: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 11 },
+        },
+        series: [{
+          type: 'radar',
+          data: [{
+            value: [allData.radar_series[0]?.value[0] || 0, allData.radar_series[0]?.value[1] || 0,
+                    allData.radar_series[0]?.value[2] || 0, allData.radar_series[0]?.value[3] || 0,
+                    allData.radar_series[0]?.value[4] || 0, allData.radar_series[0]?.value[5] || 0,
+                    allData.radar_series[0]?.value[6] || 0, allData.radar_series[0]?.value[7] || 0],
+            name: listing.title,
+            itemStyle: { color: COLORS.primary },
+            areaStyle: { opacity: 0.15 },
+          }],
+        }],
+      });
+    }
+  }
+
+  // 渲染对比柱状图
+  if (region && listing.total_monthly_cost) {
+    const el2 = document.getElementById('chart-compare-bar');
+    if (el2) {
+      const ch = echarts.init(el2);
+      ch.setOption({
+        ...BASE_OPT,
+        xAxis: { type: 'category', data: ['この物件', 'エリア平均'] },
+        yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted } },
+        series: [{
+          type: 'bar',
+          data: [
+            { value: listing.total_monthly_cost, itemStyle: { color: COLORS.primary } },
+            { value: region.avg_rent, itemStyle: { color: COLORS.warn } },
+          ],
+          barMaxWidth: 80, label: { show: true, formatter: p => p.value.toLocaleString() + '円', fontFamily: CHART_FONT, fontSize: 12 },
+        }],
+      });
+    }
+  }
+
+  // 渲染全部列表
+  if (allData.total > 1) {
+    const tbody = document.querySelector('#all-listings-table tbody');
+    if (tbody) {
+      tbody.innerHTML = allData.compare_rows.map(l => {
+        const dev = l.region_avg_rent && l.total_monthly_cost
+          ? `<span style="color:${l.total_monthly_cost > l.region_avg_rent ? 'var(--bad)' : 'var(--good)'};font-weight:600;">${Math.round((l.total_monthly_cost - l.region_avg_rent) / l.region_avg_rent * 100)}%</span>`
+          : '-';
+        return `<tr>
+          <td><span class="badge score">${l.total_score || '-'}</span></td>
+          <td style="font-weight:600;color:var(--text-primary);">${l.title || ''}</td>
+          <td>${l.ward || '-'}</td>
+          <td>${(l.total_monthly_cost || 0).toLocaleString()}円</td>
+          <td>${l.area_m2 || '?'}㎡</td>
+          <td>${dev}</td>
+          <td><a href="${l.detail_url}" target="_blank" style="color:var(--accent);">→</a></td>
+        </tr>`;
+      }).join('');
+    }
   }
 }
 
-load();
+// 初始加载
+loadAnalysis();
