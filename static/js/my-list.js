@@ -117,32 +117,61 @@ function wordCloudHtml(d) {
   </div>`;
 }
 
+// 房子轮廓的极坐标半径函数(供 wordcloud2 的 shape 使用)
+// 多边形以中心为原点(x右、y下),屋顶朝上(负 y);对每个角度射线求与多边形的最远交点
+const HOUSE_POLY = [
+  [0.60, 0.58],   // 右下角
+  [0.60, -0.18],  // 右墙顶
+  [0.72, -0.18],  // 右屋檐
+  [0.00, -0.80],  // 屋顶尖(上)
+  [-0.72, -0.18], // 左屋檐
+  [-0.60, -0.18], // 左墙顶
+  [-0.60, 0.58],  // 左下角
+];
+const HOUSE_MAXR = 0.83; // 归一化基准(最远顶点距离)
+function houseShape(theta) {
+  const dx = Math.cos(theta), dy = Math.sin(theta);
+  let best = 0;
+  for (let i = 0; i < HOUSE_POLY.length; i++) {
+    const a = HOUSE_POLY[i], b = HOUSE_POLY[(i + 1) % HOUSE_POLY.length];
+    const ex = b[0] - a[0], ey = b[1] - a[1];
+    const det = -dx * ey + ex * dy;
+    if (Math.abs(det) < 1e-9) continue;
+    const t = (-a[0] * ey + ex * a[1]) / det;   // 射线距离
+    const s = (dx * a[1] - dy * a[0]) / det;    // 线段参数
+    if (t > 0 && s >= 0 && s <= 1 && t > best) best = t;
+  }
+  return Math.min(best / HOUSE_MAXR, 1);
+}
+
 function drawWordCloud(cloud) {
   const el = document.getElementById('chart-wordcloud');
   if (!el || !cloud || !cloud.length) return;
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
 
-  // 优先用 wordcloud2.js 打包算法(真正聚合成一团),失败则降级 HTML 标签云
+  // 优先用 wordcloud2.js 打包算法(聚合成"房子"形状),失败则降级 HTML 标签云
   if (typeof WordCloud === 'function') {
     el.innerHTML = '';
-    el.style.height = '300px';
-    const w = el.clientWidth || 600, h = 300;
+    const side = Math.min(el.clientWidth || 520, 560);
+    const h = Math.round(side * 0.82);
     const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    canvas.width = side; canvas.height = h;
+    canvas.style.width = side + 'px'; canvas.style.height = h + 'px';
+    canvas.style.display = 'block'; canvas.style.margin = '0 auto';
+    el.style.height = 'auto';
     el.appendChild(canvas);
     let i = 0;
     WordCloud(canvas, {
       list: cloud.map(c => [c.name, c.value]),
-      gridSize: 6,
-      weightFactor: v => max === min ? 42 : 18 + (v - min) / (max - min) * 58, // 18~76px
+      gridSize: 4,
+      weightFactor: v => max === min ? 34 : 14 + (v - min) / (max - min) * 46, // 14~60px
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
       color: () => COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0.35, rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: 0,
-      shape: 'circle', drawOutOfBound: false, shrinkToFit: true,
+      rotateRatio: 0.25, rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: 0,
+      shape: houseShape, ellipticity: 1, drawOutOfBound: false, shrinkToFit: true,
     });
     return;
   }
