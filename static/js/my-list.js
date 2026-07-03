@@ -120,14 +120,37 @@ function wordCloudHtml(d) {
 function drawWordCloud(cloud) {
   const el = document.getElementById('chart-wordcloud');
   if (!el || !cloud || !cloud.length) return;
-  // 纯 HTML 词云:字号按频次映射,颜色取调色板,依赖零外部库(部署稳定)
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
-  const size = v => max === min ? 26 : Math.round(16 + (v - min) / (max - min) * 32); // 16~48px
-  const chips = cloud.map((c, i) => {
-    const color = COLORS.palette[i % COLORS.palette.length];
-    return `<span title="${c.name}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${color};line-height:1.1;white-space:nowrap;">${c.name}</span>`;
-  }).join('');
+
+  // 优先用 wordcloud2.js 打包算法(真正聚合成一团),失败则降级 HTML 标签云
+  if (typeof WordCloud === 'function') {
+    el.innerHTML = '';
+    el.style.height = '300px';
+    const w = el.clientWidth || 600, h = 300;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    el.appendChild(canvas);
+    let i = 0;
+    WordCloud(canvas, {
+      list: cloud.map(c => [c.name, c.value]),
+      gridSize: 6,
+      weightFactor: v => max === min ? 42 : 18 + (v - min) / (max - min) * 58, // 18~76px
+      fontFamily: 'Noto Sans JP, sans-serif',
+      fontWeight: '700',
+      color: () => COLORS.palette[(i++) % COLORS.palette.length],
+      backgroundColor: 'transparent',
+      rotateRatio: 0.35, rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: 0,
+      shape: 'circle', drawOutOfBound: false, shrinkToFit: true,
+    });
+    return;
+  }
+
+  // 降级:HTML 标签云
+  const size = v => max === min ? 26 : Math.round(16 + (v - min) / (max - min) * 32);
+  const chips = cloud.map((c, i2) =>
+    `<span title="${c.name}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${COLORS.palette[i2 % COLORS.palette.length]};line-height:1.1;white-space:nowrap;">${c.name}</span>`).join('');
   el.style.height = 'auto';
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 20px;padding:24px 8px;min-height:180px;">${chips}</div>`;
 }
@@ -397,6 +420,7 @@ function poolHtml(pool, d) {
         <div style="display:flex;gap:8px;align-items:center;">
           <select id="pool-sort" class="select">${sortOptions}</select>
           <button class="btn btn-primary" id="pool-compare" disabled>選択して比較 (0)</button>
+          <button class="btn btn-outline" id="pool-clear" title="物件プールを全て削除">プールをクリア</button>
         </div>
       </div>
       <p style="font-size:12px;color:var(--text-muted);padding:0 24px 8px;margin:0;">行をクリックで上のレポートを切替 / チェックで2〜4件を横断比較</p>
@@ -480,6 +504,15 @@ function wirePoolHandlers() {
   });
   const sortSel = document.getElementById('pool-sort');
   if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value; render(); });
+
+  const clearBtn = document.getElementById('pool-clear');
+  if (clearBtn) clearBtn.addEventListener('click', async () => {
+    const n = (state.data && state.data.total) || 0;
+    if (!confirm(`物件プールの ${n} 件を全て削除します。よろしいですか?(元に戻せません)`)) return;
+    await fetch('/api/pool/clear', { method: 'POST' });
+    state.selectedId = null;
+    await loadAnalysis();
+  });
 }
 
 // ---------- 初始化 ----------

@@ -454,6 +454,17 @@ def api_compare():
     return jsonify(rows)
 
 
+@app.route("/api/pool/clear", methods=["POST"])
+def api_pool_clear():
+    """物件プールを全てクリア(履歴的な一括抓取データのリセット用)。"""
+    n = query_one("SELECT COUNT(*) AS c FROM rental_listings")["c"]
+    execute("DELETE FROM listing_price_history")
+    execute("DELETE FROM listing_status")
+    execute("DELETE FROM listing_scores")
+    execute("DELETE FROM rental_listings")
+    return jsonify({"ok": True, "deleted": n})
+
+
 # ===== Import / Scrape API =====
 
 @app.route("/api/import/csv", methods=["POST"])
