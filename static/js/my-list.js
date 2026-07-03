@@ -99,11 +99,37 @@ async function render() {
   const region = selected ? await getRegion(selected.ward) : null;
 
   container.innerHTML = reportHtml(selected, region) +
+    wordCloudHtml(d) +
     (pool.length ? poolHtml(sortPool(pool), d) : '');
 
-  drawReportCharts(selected, region);
+  drawReportCharts(selected, region, d.prefs);
+  drawWordCloud(d.feature_cloud);
   if (pool.length >= 2) drawScatter(d.scatter_data);
   wirePoolHandlers();
+}
+
+// ---------- 特徴クラウド(词云) ----------
+function wordCloudHtml(d) {
+  if (!d.feature_cloud || !d.feature_cloud.length) return '';
+  return `<div class="card">
+    <h2>特徴クラウド <span style="font-size:12px;font-weight:400;color:var(--text-muted);">物件プールの設備・特徴の頻度</span></h2>
+    <div id="chart-wordcloud" class="chart"></div>
+  </div>`;
+}
+
+function drawWordCloud(cloud) {
+  const el = document.getElementById('chart-wordcloud');
+  if (!el || !cloud || !cloud.length) return;
+  // 纯 HTML 词云:字号按频次映射,颜色取调色板,依赖零外部库(部署稳定)
+  const vals = cloud.map(c => c.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const size = v => max === min ? 26 : Math.round(16 + (v - min) / (max - min) * 32); // 16~48px
+  const chips = cloud.map((c, i) => {
+    const color = COLORS.palette[i % COLORS.palette.length];
+    return `<span title="${c.name}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${color};line-height:1.1;white-space:nowrap;">${c.name}</span>`;
+  }).join('');
+  el.style.height = 'auto';
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 20px;padding:24px 8px;min-height:180px;">${chips}</div>`;
 }
 
 // ---------- 空状态：区域基准看板 ----------
@@ -162,53 +188,60 @@ function drawRegionBar(elId, rows) {
 }
 
 // ---------- 单套报告 ----------
+const AMENITIES = [
+  ['bath_toilet_separate', 'バストイレ別'], ['auto_lock', 'オートロック'],
+  ['delivery_box', '宅配ボックス'], ['south_facing', '南向き'],
+  ['aircon', 'エアコン'], ['pet_allowed', 'ペット可'], ['two_person_allowed', '2人入居可'],
+];
+
 function reportHtml(l, region) {
   if (!l) return '';
   const yen = v => (v || 0).toLocaleString() + '円';
   const dev = deviationOf(l);
-  let devText = '-';
+
+  // 月額指标卡:带偏差
+  let rentLabel = '<div class="label">月額</div>';
+  let rentCls = '';
   if (dev != null) {
     const diff = l.total_monthly_cost - l.region_avg_rent;
-    const color = diff > 0 ? COLORS.bad : COLORS.good;
-    devText = `<span style="color:${color};font-weight:600;">${diff > 0 ? '+' : ''}${diff.toLocaleString()}円 (${Math.round(dev * 100)}%)</span>`;
+    rentCls = dev < 0 ? 'good' : '';
+    const col = diff > 0 ? 'var(--bad)' : 'var(--good)';
+    rentLabel = `<div class="label" style="color:${col};font-weight:600;">エリア平均比 ${diff > 0 ? '+' : ''}${Math.round(dev * 100)}% (${diff > 0 ? '+' : ''}${(diff / 10000).toFixed(1)}万)</div>`;
   }
+  const areaLabel = l.region_avg_area ? `エリア平均 ${l.region_avg_area}㎡` : '専有面積';
 
-  const rows = [
-    ['物件名', l.title || '-', '-'],
-    ['プラットフォーム', `<span class="badge platform">${l.platform || '-'}</span>`, '-'],
-    ['スコア', `<span class="badge score">${l.total_score ?? '-'}</span>`, '-'],
-    ['月額', yen(l.total_monthly_cost), l.region_avg_rent ? yen(l.region_avg_rent) : '-'],
-    ['家賃', yen(l.rent), '-'],
-    ['管理費', yen(l.management_fee), '-'],
-    ['面積', `${l.area_m2 || '?'}㎡`, l.region_avg_area ? `${l.region_avg_area}㎡` : '-'],
-    ['間取り', l.layout || '-', '-'],
-    ['階数', `${l.floor || '?'}階`, '-'],
-    ['築年数', `築${l.building_age ?? '?'}年`, l.region_avg_age ? `築${l.region_avg_age}年` : '-'],
-    ['徒歩', `${l.walk_minutes ?? '?'}分`, '-'],
-    ['敷金', yen(l.deposit), '-'],
-    ['礼金', yen(l.key_money), '-'],
-    ['初期費用', yen(l.initial_cost_estimate), '-'],
-    ['㎡単価', l.price_per_m2 ? Math.round(l.price_per_m2).toLocaleString() + '円' : '-', '-'],
-    ['ペット', l.pet_allowed ? '<span class="tag good">可</span>' : '不可', '-'],
-    ['エリア平均との偏差', devText, '-'],
-  ];
-  if (region) {
-    rows.push(['エリア治安 <span class="tag muted">参考</span>', region.safety_level || '-', '-']);
-    rows.push(['エリア利便性 <span class="tag muted">参考</span>', region.convenience_level || '-', '-']);
-    rows.push(['エリア環境 <span class="tag muted">参考</span>', region.environment_level || '-', '-']);
-  }
+  const metrics = `
+    <div class="metric-grid" style="margin:16px 0 4px;">
+      <div class="metric"><div class="num">${l.total_score ?? '-'}</div><div class="label">総合スコア /100</div></div>
+      <div class="metric ${rentCls}"><div class="num">${(l.total_monthly_cost || 0).toLocaleString()}<span style="font-size:14px;">円</span></div>${rentLabel}</div>
+      <div class="metric"><div class="num">${l.area_m2 || '?'}<span style="font-size:14px;">㎡</span></div><div class="label">${areaLabel}</div></div>
+      <div class="metric"><div class="num">${l.price_per_m2 ? Math.round(l.price_per_m2).toLocaleString() : '-'}<span style="font-size:14px;">円</span></div><div class="label">㎡単価</div></div>
+      <div class="metric"><div class="num">${l.initial_cost_estimate ? (l.initial_cost_estimate / 10000).toFixed(1) : '-'}<span style="font-size:14px;">万円</span></div><div class="label">初期費用(概算)</div></div>
+    </div>`;
+
+  const amenityChips = AMENITIES.map(([k, label]) =>
+    l[k] ? `<span class="tag good">✓ ${label}</span>` : `<span class="tag muted">${label}</span>`).join('');
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
       ${isFav ? '★ ' + l.fav_status : '☆ 気になる'}</button>`;
 
+  // 详细数据(2列),已在指标卡展示的不重复
+  const detailRows = [
+    ['家賃', yen(l.rent)], ['管理費', yen(l.management_fee)],
+    ['間取り', l.layout || '-'], ['階数', l.floor ? `${l.floor}階${l.total_floors ? ' / ' + l.total_floors + '階建' : ''}` : '-'],
+    ['築年数', `築${l.building_age ?? '?'}年`], ['構造', l.structure || '-'],
+    ['最寄駅', `${l.nearest_station || '-'} 徒歩${l.walk_minutes ?? '?'}分`],
+    ['敷金 / 礼金', `${yen(l.deposit)} / ${yen(l.key_money)}`],
+  ];
+
   let html = `
     <div class="card" style="margin-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-          <h2 style="margin-bottom:4px;">物件詳細レポート</h2>
+          <h2 style="margin-bottom:4px;">${l.title || '物件レポート'} <span class="badge platform">${l.platform || '-'}</span></h2>
           <p style="font-size:13px;color:var(--text-secondary);margin:0;">
-            ${l.ward || '地域不明'} の物件解析結果。${l.region_avg_rent ? `エリア平均(${l.ward})と比較しています。` : 'このエリアの基準データがありません。'}
+            ${l.ward || '地域不明'}${l.region_avg_rent ? ` ・ エリア平均と比較` : ' ・ エリア基準データなし'}
           </p>
         </div>
         <div style="display:flex;gap:8px;">
@@ -216,16 +249,30 @@ function reportHtml(l, region) {
           ${l.detail_url ? `<a class="btn btn-outline" href="${l.detail_url}" target="_blank" rel="noopener">原平台で見る</a>` : ''}
         </div>
       </div>
-      <table style="width:100%;margin-top:16px;">
-        <thead><tr><th>項目</th><th>この物件</th><th>エリア平均</th></tr></thead>
-        <tbody>
-          ${rows.map(r => `<tr><td style="font-weight:600;color:var(--text-primary);">${r[0]}</td><td>${r[1]}</td><td style="color:var(--text-muted);">${r[2]}</td></tr>`).join('')}
-        </tbody>
-      </table>
+      ${metrics}
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">設備・特徴</div>
+        ${amenityChips}
+      </div>
     </div>`;
+
+  // エリア参考(治安/便利/環境)独立卡片
+  if (region) {
+    html += `
+    <div class="card">
+      <h2>エリア参考情報 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
+      <div class="metric-grid" style="margin-top:12px;">
+        <div class="metric"><div class="num" style="font-size:20px;">${region.safety_level || '-'}</div><div class="label">治安</div></div>
+        <div class="metric"><div class="num" style="font-size:20px;">${region.convenience_level || '-'}</div><div class="label">利便性</div></div>
+        <div class="metric"><div class="num" style="font-size:20px;">${region.environment_level || '-'}</div><div class="label">住環境</div></div>
+        <div class="metric"><div class="num" style="font-size:20px;">${region.avg_rent ? (region.avg_rent / 10000).toFixed(1) + '万' : '-'}</div><div class="label">エリア平均相場</div></div>
+      </div>
+    </div>`;
+  }
 
   if (l.total_score != null) {
     html += `<div class="card"><h2>スコアレーダー <span style="font-size:12px;font-weight:400;color:var(--text-muted);">8次元評価</span></h2><div id="chart-radar-single" class="chart"></div></div>`;
+    html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;
     if (l.region_avg_rent && l.total_monthly_cost)
       html += `<div class="card"><h2>エリア平均との比較</h2><div id="chart-compare-bar" class="chart"></div></div>`;
     html += `<div class="card"><h2>推薦理由</h2>
@@ -233,10 +280,21 @@ function reportHtml(l, region) {
         ${l.score_reason || 'スコア理由がありません'}
       </div></div>`;
   }
+
+  // 详细数据表(次要,放最后)
+  html += `
+    <div class="card">
+      <h2>詳細データ</h2>
+      <table style="width:100%;margin-top:8px;">
+        <tbody>
+          ${detailRows.map(r => `<tr><td style="font-weight:600;color:var(--text-primary);width:40%;">${r[0]}</td><td>${r[1]}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
   return html;
 }
 
-function drawReportCharts(l, region) {
+function drawReportCharts(l, region, prefs) {
   if (!l || l.total_score == null) return;
   const rEl = document.getElementById('chart-radar-single');
   if (rEl) {
@@ -259,6 +317,32 @@ function drawReportCharts(l, region) {
           name: l.title,
           itemStyle: { color: COLORS.primary }, areaStyle: { opacity: 0.15 },
         }],
+      }],
+    });
+  }
+  // 初期費用の内訳(甜甜圈)
+  const iEl = document.getElementById('chart-initcost');
+  if (iEl) {
+    const p = prefs || { broker_fee_rate: 0.55, prepaid_rent_months: 1, misc_cost: 40000 };
+    const rent = l.rent || 0;
+    const parts = [
+      { name: '敷金', value: l.deposit || 0 },
+      { name: '礼金', value: l.key_money || 0 },
+      { name: '仲介手数料', value: Math.round(rent * p.broker_fee_rate) },
+      { name: '前家賃', value: Math.round(rent * p.prepaid_rent_months) },
+      { name: '諸費用', value: p.misc_cost || 0 },
+    ].filter(x => x.value > 0);
+    const total = parts.reduce((s, x) => s + x.value, 0);
+    echarts.init(iEl).setOption({
+      ...BASE_OPT,
+      tooltip: { ...BASE_OPT.tooltip, formatter: p2 => `${p2.name}<br>${p2.value.toLocaleString()}円 (${p2.percent}%)` },
+      legend: { bottom: 0, textStyle: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 11 } },
+      series: [{
+        type: 'pie', radius: ['45%', '68%'], center: ['50%', '44%'], avoidLabelOverlap: true,
+        itemStyle: { borderColor: '#fff', borderWidth: 2 },
+        label: { show: true, position: 'center', formatter: () => `概算\n${(total / 10000).toFixed(1)}万円`, fontFamily: CHART_FONT, fontSize: 13, fontWeight: 600, color: COLORS.text },
+        color: COLORS.palette,
+        data: parts,
       }],
     });
   }

@@ -237,9 +237,40 @@ def api_my_list():
         "age_score": l.get("age_score"), "initial_cost_score": l.get("initial_cost_score"),
         "region_avg_rent": l.get("region_avg_rent"),
         "region_avg_area": l.get("region_avg_area"), "region_avg_age": l.get("region_avg_age"),
+        "total_floors": l.get("total_floors"), "structure": l.get("structure"),
+        "two_person_allowed": l.get("two_person_allowed"),
+        "bath_toilet_separate": l.get("bath_toilet_separate"), "auto_lock": l.get("auto_lock"),
+        "delivery_box": l.get("delivery_box"), "south_facing": l.get("south_facing"),
+        "aircon": l.get("aircon"),
         "fav_status": l.get("fav_status"), "fav_status_id": l.get("fav_status_id"),
         "detail_url": l.get("detail_url"),
     } for l in listings]
+
+    # 特徴クラウド(词云):聚合房源池的設備・特徴关键词频次
+    feature_labels = [
+        ("bath_toilet_separate", "バストイレ別"), ("auto_lock", "オートロック"),
+        ("delivery_box", "宅配ボックス"), ("south_facing", "南向き"),
+        ("aircon", "エアコン"), ("pet_allowed", "ペット可"),
+        ("two_person_allowed", "2人入居可"),
+    ]
+    cloud = {}
+    for l in listings:
+        for col, label in feature_labels:
+            if l.get(col):
+                cloud[label] = cloud.get(label, 0) + 1
+        if l.get("layout"):
+            cloud[l["layout"]] = cloud.get(l["layout"], 0) + 1
+        if l.get("walk_minutes") is not None and l["walk_minutes"] <= 10:
+            cloud["駅徒歩10分以内"] = cloud.get("駅徒歩10分以内", 0) + 1
+        if l.get("building_age") is not None and l["building_age"] <= 10:
+            cloud["築浅"] = cloud.get("築浅", 0) + 1
+        if l.get("area_m2") and l["area_m2"] >= (pref["ideal_area_m2"] if pref else 40):
+            cloud["広め"] = cloud.get("広め", 0) + 1
+        if l.get("total_monthly_cost") and l["total_monthly_cost"] <= max_cost:
+            cloud["予算内"] = cloud.get("予算内", 0) + 1
+    feature_cloud = sorted(
+        [{"name": k, "value": v} for k, v in cloud.items()],
+        key=lambda x: x["value"], reverse=True)
 
     # 区域偏离度
     deviations = [{
@@ -270,6 +301,14 @@ def api_my_list():
         "deviations": deviations,
         "status_progress": status_progress,
         "price_history": price_history,
+        "feature_cloud": feature_cloud,
+        "prefs": {
+            "broker_fee_rate": pref["broker_fee_rate"] if pref else 0.55,
+            "prepaid_rent_months": pref["prepaid_rent_months"] if pref else 1,
+            "misc_cost": pref["misc_cost"] if pref else 40000,
+            "max_total_monthly_cost": max_cost,
+            "ideal_area_m2": pref["ideal_area_m2"] if pref else 40,
+        },
     })
 
 
