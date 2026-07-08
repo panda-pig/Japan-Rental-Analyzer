@@ -253,21 +253,34 @@ def api_my_list():
         ("aircon", "エアコン"), ("pet_allowed", "ペット可"),
         ("two_person_allowed", "2人入居可"),
     ]
+    # 语义统一为"共通の魅力・条件クリア"正向标签(設備 + 达标标签),不含裸间取り
+    ideal_area = pref["ideal_area_m2"] if pref else 40
     cloud = {}
+
+    def bump(label):
+        cloud[label] = cloud.get(label, 0) + 1
+
     for l in listings:
-        for col, label in feature_labels:
+        for col, label in feature_labels:  # 設備
             if l.get(col):
-                cloud[label] = cloud.get(label, 0) + 1
-        if l.get("layout"):
-            cloud[l["layout"]] = cloud.get(l["layout"], 0) + 1
-        if l.get("walk_minutes") is not None and l["walk_minutes"] <= 10:
-            cloud["駅徒歩10分以内"] = cloud.get("駅徒歩10分以内", 0) + 1
-        if l.get("building_age") is not None and l["building_age"] <= 10:
-            cloud["築浅"] = cloud.get("築浅", 0) + 1
-        if l.get("area_m2") and l["area_m2"] >= (pref["ideal_area_m2"] if pref else 40):
-            cloud["広め"] = cloud.get("広め", 0) + 1
+                bump(label)
+        # 达标标签(对用户条件/相场的正向判断)
         if l.get("total_monthly_cost") and l["total_monthly_cost"] <= max_cost:
-            cloud["予算内"] = cloud.get("予算内", 0) + 1
+            bump("予算内")
+        if l.get("total_monthly_cost") and l.get("region_avg_rent") and l["total_monthly_cost"] < l["region_avg_rent"]:
+            bump("コスパ良")
+        if l.get("area_m2") and l["area_m2"] >= ideal_area:
+            bump("広め")
+        if l.get("building_age") is not None and l["building_age"] <= 10:
+            bump("築浅")
+        if l.get("walk_minutes") is not None and l["walk_minutes"] <= 10:
+            bump("駅徒歩10分以内")
+        if l.get("floor") is not None and l["floor"] >= 3:
+            bump("3階以上")
+        if l.get("key_money") == 0:
+            bump("礼金なし")
+        if l.get("deposit") == 0:
+            bump("敷金なし")
     feature_cloud = sorted(
         [{"name": k, "value": v} for k, v in cloud.items()],
         key=lambda x: x["value"], reverse=True)
