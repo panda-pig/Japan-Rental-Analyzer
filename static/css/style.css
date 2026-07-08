@@ -79,6 +79,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-brand-icon {
@@ -554,11 +556,16 @@ select:focus, input:focus {
     overflow-x: auto;
     gap: 2px;
   }
-  .nav-brand { margin-right: 12px; font-size: 13px; }
+  .nav-brand { margin-right: 10px; font-size: 13px; }
+  .nav-brand > span:last-child { display: none; }  /* 手机端只留 icon,避免品牌名换行/挤占 */
   .nav a.nav-link { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
   .container { padding: 16px 12px; }
   .grid { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .metric { padding: 14px; }
+  .metric .num { font-size: 22px; }
   .filters { grid-template-columns: 1fr 1fr; }
   .page-title { font-size: 20px; }
+  .card { padding: 16px; }
+  .chart { height: 260px; }
 }

@@ -563,6 +563,12 @@ function wirePoolHandlers() {
 }
 
 // ---------- 初始化 ----------
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => { if (state.data && state.data.total) render(); }, 300);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('import-url');
   if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') importAndAnalyze(); });

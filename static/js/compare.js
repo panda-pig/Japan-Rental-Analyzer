@@ -6,13 +6,16 @@ const RADAR_DIMS = [
   { name: '築年数', max: 10 }, { name: '初期費用', max: 5 },
 ];
 
+let radarChart = null;
 function drawCompareRadar(data) {
   const card = document.getElementById('radar-card');
   const el = document.getElementById('compare-radar');
   const scored = data.filter(l => l.total_score != null);
   if (!el || scored.length < 2) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
-  echarts.init(el).setOption({
+  if (radarChart) radarChart.dispose();
+  radarChart = echarts.init(el);
+  radarChart.setOption({
     textStyle: { fontFamily: CHART_FONT, color: '#5A6B7E', fontSize: 12 },
     tooltip: {
       backgroundColor: '#FFFFFF', borderColor: '#E4E8EC', borderWidth: 1,
@@ -75,6 +78,12 @@ async function load() {
   }
   html += `<tr><td style="font-weight:600;color:var(--text-primary);">原平台</td>` + data.map(l => `<td><a href="${l.detail_url}" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none;">詳細を見る</a></td>`).join("") + "</tr>";
   html += '</tbody></table>';
-  el.innerHTML = html;
+  el.innerHTML = '<div style="overflow-x:auto;">' + html + '</div>';
 }
+
+let _rz;
+window.addEventListener('resize', () => {
+  clearTimeout(_rz);
+  _rz = setTimeout(() => { if (radarChart) radarChart.resize(); }, 250);
+});
 load();
