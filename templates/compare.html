@@ -2,6 +2,10 @@
 {% block title %}比較{% endblock %}
 {% block content %}
 <h1 class="page-title">物件比較</h1>
+<div id="radar-card" class="card" style="display:none;">
+  <h2>スコアレーダー比較 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">8次元評価の重ね合わせ</span></h2>
+  <div id="compare-radar" class="chart" style="height:440px;"></div>
+</div>
 <div class="card"><div id="compare-table"></div></div>
 {% endblock %}
 {% block js %}compare.js{% endblock %}

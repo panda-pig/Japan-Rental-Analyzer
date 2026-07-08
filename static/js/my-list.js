@@ -104,6 +104,7 @@ async function render() {
 
   drawReportCharts(selected, region, d.prefs);
   drawWordCloud(d.feature_cloud);
+  drawLayoutPie(d.layout_dist);
   if (pool.length >= 2) drawScatter(d.scatter_data);
   wirePoolHandlers();
 }
@@ -460,7 +461,24 @@ function poolHtml(pool, d) {
         </table>
       </div>
     </div>
+    ${d.layout_dist && d.layout_dist.length ? '<div class="card"><h2>間取り分布 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">物件プール</span></h2><div id="chart-layout" class="chart" style="height:260px;"></div></div>' : ''}
     ${pool.length >= 2 ? '<div class="card"><h2>コスパ散布図 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">面積 vs 月額</span></h2><div id="chart-scatter" class="chart"></div></div>' : ''}`;
+}
+
+function drawLayoutPie(dist) {
+  const el = document.getElementById('chart-layout');
+  if (!el || !dist || !dist.length) return;
+  echarts.init(el).setOption({
+    ...BASE_OPT,
+    tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.name}: ${p.value}件 (${p.percent}%)` },
+    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 12 } },
+    series: [{
+      type: 'pie', radius: ['42%', '68%'], center: ['38%', '50%'], avoidLabelOverlap: true,
+      itemStyle: { borderColor: '#fff', borderWidth: 2 },
+      label: { show: false }, color: COLORS.palette,
+      data: dist,
+    }],
+  });
 }
 
 function drawScatter(scatter) {

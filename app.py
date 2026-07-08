@@ -285,6 +285,15 @@ def api_my_list():
         [{"name": k, "value": v} for k, v in cloud.items()],
         key=lambda x: x["value"], reverse=True)
 
+    # 间取り分布(饼图用)
+    layout_counts = {}
+    for l in listings:
+        if l.get("layout"):
+            layout_counts[l["layout"]] = layout_counts.get(l["layout"], 0) + 1
+    layout_dist = sorted(
+        [{"name": k, "value": v} for k, v in layout_counts.items()],
+        key=lambda x: x["value"], reverse=True)
+
     # 区域偏离度
     deviations = [{
         "name": l.get("title", "?")[:20],
@@ -315,6 +324,7 @@ def api_my_list():
         "status_progress": status_progress,
         "price_history": price_history,
         "feature_cloud": feature_cloud,
+        "layout_dist": layout_dist,
         "prefs": {
             "broker_fee_rate": pref["broker_fee_rate"] if pref else 0.55,
             "prepaid_rent_months": pref["prepaid_rent_months"] if pref else 1,
@@ -461,7 +471,9 @@ def api_compare():
     if not id_list:
         return jsonify([])
     placeholders = ",".join("?" * len(id_list))
-    rows = query_all(f"""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved
+    rows = query_all(f"""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
+        s.budget_score, s.area_score, s.commute_score, s.floor_score, s.pet_score,
+        s.station_score, s.age_score, s.initial_cost_score
         FROM rental_listings l LEFT JOIN listing_scores s ON s.listing_id=l.id
         WHERE l.id IN ({placeholders})""", id_list)
     return jsonify(rows)
