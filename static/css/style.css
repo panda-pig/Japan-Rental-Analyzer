@@ -163,6 +163,25 @@ body {
   margin-bottom: 28px;
 }
 
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: -8px 0 24px;
+  max-width: 720px;
+}
+
+.card h2 .sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .metric {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -568,4 +587,5 @@ select:focus, input:focus {
   .page-title { font-size: 20px; }
   .card { padding: 16px; }
   .chart { height: 260px; }
+  .grid-2 { grid-template-columns: 1fr; gap: 12px; }
 }

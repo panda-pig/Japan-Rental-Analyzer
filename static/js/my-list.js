@@ -241,6 +241,8 @@ function drawRegionBar(elId, rows) {
 }
 
 // ---------- 单套报告 ----------
+function scoreColor(s) { return s >= 75 ? COLORS.good : s >= 60 ? COLORS.primary : s >= 45 ? COLORS.warn : COLORS.bad; }
+
 const AMENITIES = [
   ['bath_toilet_separate', 'バストイレ別'], ['auto_lock', 'オートロック'],
   ['delivery_box', '宅配ボックス'], ['south_facing', '南向き'],
@@ -309,16 +311,17 @@ function reportHtml(l, region) {
       </div>
     </div>`;
 
-  // エリア参考(治安/便利/環境)独立卡片
+  // エリア評価(0~100 展示分,独立卡片,不计入房源评分)
   if (region) {
+    const sc = (score, label, level) => `<div class="metric"><div class="num" style="font-size:22px;color:${scoreColor(score ?? 50)};">${score ?? '-'}</div><div class="label">${label}${level ? ` (${level})` : ''}</div></div>`;
     html += `
     <div class="card">
-      <h2>エリア参考情報 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
+      <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
       <div class="metric-grid" style="margin-top:12px;">
-        <div class="metric"><div class="num" style="font-size:20px;">${region.safety_level || '-'}</div><div class="label">治安</div></div>
-        <div class="metric"><div class="num" style="font-size:20px;">${region.convenience_level || '-'}</div><div class="label">利便性</div></div>
-        <div class="metric"><div class="num" style="font-size:20px;">${region.environment_level || '-'}</div><div class="label">住環境</div></div>
-        <div class="metric"><div class="num" style="font-size:20px;">${region.avg_rent ? (region.avg_rent / 10000).toFixed(1) + '万' : '-'}</div><div class="label">エリア平均相場</div></div>
+        ${sc(region.overall_score, '総合評価')}
+        ${sc(region.safety_score, '治安', region.safety_level)}
+        ${sc(region.convenience_score, '便利', region.convenience_level)}
+        ${sc(region.environment_score, '住環境', region.environment_level)}
       </div>
     </div>`;
   }

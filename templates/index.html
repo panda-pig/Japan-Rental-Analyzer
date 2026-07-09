@@ -1,31 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}エリアデータ{% endblock %}
 {% block content %}
-<h1 class="page-title">エリアデータダッシュボード</h1>
+<h1 class="page-title">エリアデータ</h1>
+<p class="page-subtitle">東京・横浜・川崎エリアの相場と住みやすさ。狙い目エリアを見つけたら、気になる物件を「物件分析」でURL貼り付け。</p>
 
-<!-- 指标卡 -->
 <div class="metric-grid" id="metrics"></div>
 
-<!-- 东京23区平均租金 -->
 <div class="card">
-  <h2>東京都23区 平均賃料(1LDK)</h2>
-  <div id="chart-tokyo-rent" class="chart"></div>
+  <h2>狙い目エリアマップ <span class="sub">相場 × 総合評価 — 右下ほど「安くて評価が高い」</span></h2>
+  <div id="chart-value-map" class="chart" style="height:440px;"></div>
 </div>
 
-<!-- 横浜各区平均租金 -->
-<div class="card">
-  <h2>横浜市各区 平均賃料(1LDK)</h2>
-  <div id="chart-yokohama-rent" class="chart"></div>
+<div class="grid-2">
+  <div class="card"><h2>東京23区 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-tokyo-rent" class="chart"></div></div>
+  <div class="card"><h2>横浜市 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-yokohama-rent" class="chart"></div></div>
 </div>
 
-<!-- 区域宜居度雷达 -->
 <div class="card">
-  <h2>エリア宜居度 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">安全性・便利度・環境・賃料</span></h2>
-  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+  <h2>エリア比較レーダー <span class="sub">安全性・便利度・環境・相場</span></h2>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
     <select id="region-selector-1" onchange="renderRegionRadar()"></select>
     <select id="region-selector-2" onchange="renderRegionRadar()"></select>
   </div>
   <div id="chart-region-radar" class="chart"></div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+  <h2 style="padding:24px 24px 4px;">全エリア一覧 <span class="sub">見出しクリックで並び替え</span></h2>
+  <div style="overflow-x:auto;">
+    <table id="region-table">
+      <thead><tr>
+        <th data-sort="name">エリア</th>
+        <th data-sort="avg_rent">相場</th>
+        <th data-sort="overall_score">総合</th>
+        <th data-sort="safety_score">安全</th>
+        <th data-sort="convenience_score">便利</th>
+        <th data-sort="environment_score">環境</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
 {% block js %}dashboard.js{% endblock %}

@@ -93,6 +93,22 @@ def page_settings():
 
 # ===== Dashboard API =====
 
+# 区域定性等级 → 0~100 分数(C①:reinfolib 公开数据到手前的种子分,来源以后可替换)
+LEVEL_SCORE = {"高": 85, "中": 60, "低": 35}
+
+
+def _enrich_region(r):
+    """给 region_stats 行补 0~100 展示分 + 総合評価。"""
+    safety = LEVEL_SCORE.get(r.get("safety_level"), 50)
+    conv = LEVEL_SCORE.get(r.get("convenience_level"), 50)
+    env = LEVEL_SCORE.get(r.get("environment_level"), 50)
+    r["safety_score"] = safety
+    r["convenience_score"] = conv
+    r["environment_score"] = env
+    r["overall_score"] = round((safety + conv + env) / 3)
+    return r
+
+
 @app.route("/api/dashboard")
 def api_dashboard():
     total = query_one("SELECT COUNT(*) AS c FROM rental_listings WHERE is_active=1")["c"]
@@ -110,8 +126,20 @@ def api_dashboard():
         "SELECT AVG(s.total_score) AS a FROM listing_scores s JOIN rental_listings l ON s.listing_id=l.id WHERE l.is_active=1")["a"] or 0
     fav_count = query_one("SELECT COUNT(*) AS c FROM listing_status")["c"]
 
-    # 区域基准数据
-    regions = query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC")
+    # 区域基准数据(补展示分)
+    regions = [_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC")]
+    # 狙い目/相场概览只看关东(东京/神奈川),全国主要城市仅作参考不参与
+    rented = [r for r in regions if r.get("avg_rent") and r.get("prefecture") in ("東京都", "神奈川県")]
+    cheapest = min(rented, key=lambda x: x["avg_rent"]) if rented else None
+    priciest = max(rented, key=lambda x: x["avg_rent"]) if rented else None
+    best_value = max(rented, key=lambda x: x["overall_score"] * 100000 - x["avg_rent"]) if rented else None
+    area_summary = {
+        "cheapest": {"ward": cheapest["ward"], "rent": cheapest["avg_rent"]} if cheapest else None,
+        "priciest": {"ward": priciest["ward"], "rent": priciest["avg_rent"]} if priciest else None,
+        "best_value": {"ward": best_value["ward"], "rent": best_value["avg_rent"], "score": best_value["overall_score"]} if best_value else None,
+        "rent_min": cheapest["avg_rent"] if cheapest else None,
+        "rent_max": priciest["avg_rent"] if priciest else None,
+    }
     # 东京23区平均租金
     tokyo_regions = query_all("SELECT ward AS name, avg_rent AS value FROM region_stats WHERE prefecture='東京都' ORDER BY value DESC")
     # 横浜各区
@@ -147,6 +175,7 @@ def api_dashboard():
         "average_score": round(avg_score, 1),
         "favorite_count": fav_count, "price_drop_count": price_drop,
         "region_count": len(regions),
+        "area_summary": area_summary,
         "regions": regions,
         "tokyo_region_rent": tokyo_regions,
         "yokohama_region_rent": yokohama_regions,
@@ -159,7 +188,7 @@ def api_dashboard():
 
 @app.route("/api/regions")
 def api_regions():
-    return jsonify(query_all("SELECT * FROM region_stats ORDER BY prefecture, city, ward"))
+    return jsonify([_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY prefecture, city, ward")])
 
 
 @app.route("/api/regions/<ward>")
@@ -167,7 +196,7 @@ def api_region_detail(ward):
     row = query_one("SELECT * FROM region_stats WHERE ward=?", (ward,))
     if not row:
         return jsonify({"error": "not found"}), 404
-    return jsonify(row)
+    return jsonify(_enrich_region(row))
 
 
 # ===== My List Analysis API =====
