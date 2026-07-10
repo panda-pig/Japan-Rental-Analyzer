@@ -2,9 +2,24 @@ const WEIGHT_FIELDS = [["budget_weight", "予算"], ["area_weight", "面積"], [
   ["floor_weight", "階数"], ["pet_weight", "ペット"], ["station_weight", "駅距離"],
   ["age_weight", "築年数"], ["initial_cost_weight", "初期費用"]];
 
+function updateTotal() {
+  let t = 0;
+  for (const [k] of WEIGHT_FIELDS) { const el = document.getElementById("w_" + k); if (el) t += (+el.value || 0); }
+  const span = document.getElementById("weight-total");
+  if (span) { span.textContent = t; span.style.color = t === 100 ? "var(--good)" : "var(--text-muted)"; }
+}
+
+function toast(msg, ok = true) {
+  const el = document.getElementById("save-msg");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? "var(--good)" : "var(--bad)";
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ""; }, 3000);
+}
+
 async function load() {
-  const res = await fetch("/api/preferences");
-  const p = await res.json();
+  const p = await (await fetch("/api/preferences")).json();
   const set = (id, v) => document.getElementById(id).value = v ?? "";
   set("p_max_cost", p.max_total_monthly_cost);
   set("p_min_area", p.min_area_m2);
@@ -17,7 +32,8 @@ async function load() {
   set("p_prepaid", p.prepaid_rent_months);
   set("p_misc", p.misc_cost);
   document.getElementById("weights").innerHTML = WEIGHT_FIELDS.map(([k, l]) =>
-    `<div><label>${l}</label><input type="number" id="w_${k}" value="${p[k]}"></div>`).join("");
+    `<div><label>${l}</label><input type="number" id="w_${k}" value="${p[k]}" oninput="updateTotal()"></div>`).join("");
+  updateTotal();
 }
 
 function collect() {
@@ -33,16 +49,20 @@ function collect() {
   return data;
 }
 
-async function save() {
+async function persist() {
   await fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collect()) });
-  alert("保存しました");
+}
+
+async function save() {
+  await persist();
+  toast("保存しました");
 }
 
 async function recalc() {
-  await save();
-  alert("スコアを再計算しています...");
+  toast("保存して再計算中…");
+  await persist();
   await fetch("/api/scores/recalculate", { method: "POST" });
-  alert("再計算が完了しました");
+  toast("再計算が完了しました");
 }
 
 load();

@@ -467,8 +467,11 @@ def api_rankings():
 def api_status():
     if request.method == "GET":
         return jsonify(query_all("""SELECT st.*, l.title, l.platform, l.ward,
-            l.total_monthly_cost, l.detail_url FROM listing_status st
-            JOIN rental_listings l ON st.listing_id=l.id ORDER BY st.updated_at DESC"""))
+            l.total_monthly_cost, l.area_m2, l.layout, l.detail_url, s.total_score
+            FROM listing_status st
+            JOIN rental_listings l ON st.listing_id=l.id
+            LEFT JOIN listing_scores s ON s.listing_id=l.id
+            ORDER BY st.updated_at DESC"""))
     data = request.json
     sid = execute("""INSERT INTO listing_status
         (listing_id, status, priority, memo, contacted)
@@ -483,11 +486,15 @@ def api_status_modify(sid):
     if request.method == "DELETE":
         execute("DELETE FROM listing_status WHERE id=?", (sid,))
         return jsonify({"ok": True})
-    data = request.json
-    execute("""UPDATE listing_status SET status=?, priority=?, memo=?, contacted=?,
-        viewing_date=?, decision=?, updated_at=CURRENT_TIMESTAMP WHERE id=?""",
-        (data.get("status"), data.get("priority"), data.get("memo"),
-         data.get("contacted", 0), data.get("viewing_date"), data.get("decision"), sid))
+    # 部分更新:只改请求里带的字段(避免只发 status 时把 memo/viewing_date 清空)
+    data = request.json or {}
+    allowed = ["status", "priority", "memo", "contacted", "viewing_date", "decision"]
+    fields = [k for k in allowed if k in data]
+    if not fields:
+        return jsonify({"ok": True})
+    set_clause = ", ".join(f"{k}=?" for k in fields) + ", updated_at=CURRENT_TIMESTAMP"
+    params = [data[k] for k in fields] + [sid]
+    execute(f"UPDATE listing_status SET {set_clause} WHERE id=?", params)
     return jsonify({"ok": True})
 
 

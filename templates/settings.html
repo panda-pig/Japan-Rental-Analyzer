@@ -2,33 +2,35 @@
 {% block title %}設定{% endblock %}
 {% block content %}
 <h1 class="page-title">設定</h1>
+<p class="page-subtitle">物件条件と評価ウェイトを調整。「保存して再計算」で全物件のスコアが更新されます。</p>
 <div class="card">
   <h2>物件条件</h2>
   <div class="filters">
-    <div><label>月額上限</label><input type="number" id="p_max_cost"></div>
-    <div><label>面積下限</label><input type="number" id="p_min_area"></div>
-    <div><label>理想面積</label><input type="number" id="p_ideal_area"></div>
+    <div><label>月額上限 (円)</label><input type="number" id="p_max_cost"></div>
+    <div><label>面積下限 (㎡)</label><input type="number" id="p_min_area"></div>
+    <div><label>理想面積 (㎡)</label><input type="number" id="p_ideal_area"></div>
     <div><label>最低階</label><input type="number" id="p_min_floor"></div>
-    <div><label>徒歩上限</label><input type="number" id="p_max_walk"></div>
-    <div><label>築年数上限</label><input type="number" id="p_max_age"></div>
-    <div><label>目標駅</label><input type="text" id="p_target_station" placeholder="品川"></div>
+    <div><label>徒歩上限 (分)</label><input type="number" id="p_max_walk"></div>
+    <div><label>築年数上限 (年)</label><input type="number" id="p_max_age"></div>
+    <div><label>目標駅 (通勤計算)</label><input type="text" id="p_target_station" placeholder="品川"></div>
   </div>
 </div>
 <div class="card">
-  <h2>評価ウェイト <span style="font-size:12px;font-weight:400;color:var(--text-muted);">合計100推奨・自動正規化</span></h2>
+  <h2>評価ウェイト <span class="sub">合計 <b id="weight-total">0</b> / スコアは合計を100%として自動正規化</span></h2>
   <div class="filters" id="weights"></div>
 </div>
 <div class="card">
-  <h2>初期費用係数</h2>
+  <h2>初期費用係数 <span class="sub">初期費用の概算に使用</span></h2>
   <div class="filters">
-    <div><label>仲介手数料率</label><input type="number" step="0.05" id="p_broker"></div>
-    <div><label>前家賃月数</label><input type="number" id="p_prepaid"></div>
-    <div><label>固定雑費</label><input type="number" id="p_misc"></div>
+    <div><label>仲介手数料率 (家賃×)</label><input type="number" step="0.05" id="p_broker"></div>
+    <div><label>前家賃 (月)</label><input type="number" id="p_prepaid"></div>
+    <div><label>固定雑費 (円)</label><input type="number" id="p_misc"></div>
   </div>
 </div>
-<div style="display:flex;gap:12px;">
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
   <button class="btn btn-primary" onclick="save()">保存</button>
   <button class="btn btn-ghost" onclick="recalc()">保存して再計算</button>
+  <span id="save-msg" style="font-size:13px;font-weight:600;"></span>
 </div>
 {% endblock %}
 {% block js %}settings.js{% endblock %}
