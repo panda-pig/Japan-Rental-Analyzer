@@ -430,8 +430,16 @@ def api_listings():
     return jsonify(query_all(sql, params))
 
 
-@app.route("/api/listings/<int:lid>")
+@app.route("/api/listings/<int:lid>", methods=["GET", "DELETE"])
 def api_listing_detail(lid):
+    if request.method == "DELETE":
+        if not query_one("SELECT id FROM rental_listings WHERE id=?", (lid,)):
+            return jsonify({"error": "not found"}), 404
+        execute("DELETE FROM listing_price_history WHERE listing_id=?", (lid,))
+        execute("DELETE FROM listing_status WHERE listing_id=?", (lid,))
+        execute("DELETE FROM listing_scores WHERE listing_id=?", (lid,))
+        execute("DELETE FROM rental_listings WHERE id=?", (lid,))
+        return jsonify({"ok": True})
     row = query_one("""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
         s.commute_minutes AS score_commute, st.status, st.memo, st.priority
         FROM rental_listings l

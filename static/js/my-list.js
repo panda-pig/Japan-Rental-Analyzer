@@ -17,8 +17,11 @@ const regionCache = {};
 async function importAndAnalyze() {
   const url = document.getElementById('import-url').value.trim();
   const el = document.getElementById('import-result');
+  const btn = document.getElementById('import-btn');
   if (!url) { el.innerHTML = '<span style="color:var(--bad);">URLを入力してください</span>'; return; }
-  el.innerHTML = '<span style="color:var(--text-muted);">解析中... (数秒かかります)</span>';
+  if (btn && btn.disabled) return;  // 防止重复提交
+  if (btn) { btn.disabled = true; btn.textContent = '解析中…'; }
+  el.innerHTML = '<span style="color:var(--text-muted);">解析中… ページを取得しています(数秒かかります)</span>';
   try {
     const res = await fetch('/api/import/detail', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -45,11 +48,33 @@ async function importAndAnalyze() {
     }
   } catch (e) {
     el.innerHTML = '<span style="color:var(--bad);">通信エラー: ' + e.message + '</span>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '解析'; }
   }
+}
+
+// ---------- 轻量 toast(刷新/删除反馈) ----------
+function toast(msg, ok = true) {
+  let el = document.getElementById('ml-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ml-toast';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(16,24,40,0.16);color:#fff;transition:opacity .3s;';
+    document.body.appendChild(el);
+  }
+  el.style.background = ok ? 'var(--good)' : 'var(--bad)';
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 3200);
 }
 
 // ---------- 数据加载 ----------
 async function loadAnalysis() {
+  const container = document.getElementById('analysis-container');
+  if (container && !state.data) {
+    container.innerHTML = '<div class="empty-state">読み込み中…</div>';
+  }
   const res = await fetch('/api/my-list');
   state.data = await res.json();
   const pool = state.data.compare_rows || [];
@@ -299,9 +324,11 @@ function reportHtml(l, region) {
             ${l.ward || '地域不明'}${l.region_avg_rent ? ` ・ エリア平均と比較` : ' ・ エリア基準データなし'}
           </p>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           ${favBtn}
           ${l.detail_url ? `<a class="btn btn-outline" href="${l.detail_url}" target="_blank" rel="noopener">原平台で見る</a>` : ''}
+          ${l.detail_url ? `<button class="btn btn-outline" id="report-refresh" data-id="${l.id}">価格を再取得</button>` : ''}
+          <button class="btn btn-ghost btn-sm" id="report-delete" data-id="${l.id}">削除</button>
         </div>
       </div>
       ${metrics}
@@ -331,6 +358,10 @@ function reportHtml(l, region) {
     html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;
     if (l.region_avg_rent && l.total_monthly_cost)
       html += `<div class="card"><h2>エリア平均との比較</h2><div id="chart-compare-bar" class="chart"></div></div>`;
+    // 价格推移(有 2+ 次取得历史时才显示)
+    const hist = (state.data.price_history || []).filter(h => h.id === l.id);
+    if (hist.length >= 2)
+      html += `<div class="card"><h2>価格推移 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">再取得の履歴</span></h2><div id="chart-price-history" class="chart"></div></div>`;
     html += `<div class="card"><h2>推薦理由</h2>
       <div style="background:var(--good-bg);border:1px solid var(--good-border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--good);">
         ${l.score_reason || 'スコア理由がありません'}
@@ -418,6 +449,48 @@ function drawReportCharts(l, region, prefs) {
       }],
     });
   }
+  // 价格推移折线
+  const hEl = document.getElementById('chart-price-history');
+  if (hEl) {
+    const hist = (state.data.price_history || []).filter(h => h.id === l.id)
+      .sort((a, b) => (a.checked_at || '').localeCompare(b.checked_at || ''));
+    echarts.init(hEl).setOption({
+      ...BASE_OPT,
+      grid: { left: 60, right: 24, top: 20, bottom: 40 },
+      xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
+      yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
+      series: [{
+        type: 'line', smooth: true, symbolSize: 7,
+        data: hist.map(h => h.total_monthly_cost),
+        itemStyle: { color: COLORS.primary }, lineStyle: { color: COLORS.primary, width: 2 },
+        areaStyle: { color: 'rgba(37,99,235,0.08)' },
+        label: { show: true, formatter: p => (p.value / 10000).toFixed(1) + '万', fontSize: 10, color: COLORS.text },
+      }],
+    });
+  }
+}
+
+// ---------- 单套操作(再取得 / 削除) ----------
+async function refreshListing(id) {
+  const btn = document.getElementById('report-refresh');
+  if (btn) { btn.disabled = true; btn.textContent = '取得中…'; }
+  try {
+    const res = await fetch('/api/listings/' + id + '/refresh', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok || d.error) { toast(d.error || '再取得に失敗しました', false); }
+    else { toast(d.message || '更新しました', !d.price_changed ? true : true); await loadAnalysis(); }
+  } catch (e) { toast('通信エラー: ' + e.message, false); }
+  finally { const b = document.getElementById('report-refresh'); if (b) { b.disabled = false; b.textContent = '価格を再取得'; } }
+}
+
+async function deleteListing(id) {
+  if (!confirm('この物件をプールから削除しますか?(元に戻せません)')) return;
+  try {
+    await fetch('/api/listings/' + id, { method: 'DELETE' });
+    if (state.selectedId === id) state.selectedId = null;
+    toast('削除しました');
+    await loadAnalysis();
+  } catch (e) { toast('削除に失敗しました', false); }
 }
 
 // ---------- 房源池列表 ----------
@@ -544,6 +617,10 @@ function wirePoolHandlers() {
     b.addEventListener('click', e => { e.stopPropagation(); toggleFav(parseInt(b.dataset.id, 10), b.dataset.favid || null); }));
   const reportFav = document.getElementById('report-fav');
   if (reportFav) reportFav.addEventListener('click', () => toggleFav(parseInt(reportFav.dataset.id, 10), reportFav.dataset.favid || null));
+  const reportRefresh = document.getElementById('report-refresh');
+  if (reportRefresh) reportRefresh.addEventListener('click', () => refreshListing(parseInt(reportRefresh.dataset.id, 10)));
+  const reportDelete = document.getElementById('report-delete');
+  if (reportDelete) reportDelete.addEventListener('click', () => deleteListing(parseInt(reportDelete.dataset.id, 10)));
 
   const cmp = document.getElementById('pool-compare');
   if (cmp) cmp.addEventListener('click', () => {
