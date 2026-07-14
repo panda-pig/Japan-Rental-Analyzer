@@ -12,9 +12,11 @@ app = Flask(__name__)
 # 启动时自动建表 + 投入区域基准(幂等,首次部署或磁盘重置后生效)
 init_db()
 # 如果 region_stats 为空才 seed(避免每次启动覆盖)
-from db_helper import query_one
+from db_helper import query_one, execute as _execute
 if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
     seed_regions()
+# 清理旧版种子遗留的无名行(ward/city 都为空 → 前端曾显示 "null")
+_execute("DELETE FROM region_stats WHERE ward IS NULL AND city IS NULL")
 
 
 def _score_single(listing_id):

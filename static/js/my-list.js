@@ -218,7 +218,7 @@ async function renderEmpty(container) {
 
   const regionRows = (d.regions || []).slice(0, 30).map(r => `
     <tr>
-      <td style="font-weight:600;color:var(--text-primary);">${r.ward || r.city || '-'}</td>
+      <td style="font-weight:600;color:var(--text-primary);">${r.ward || r.city || r.prefecture || '-'}</td>
       <td>${(r.avg_rent || 0).toLocaleString()}円</td>
       <td>${r.avg_area || '-'}㎡</td>
       <td>${r.safety_level || '-'}</td>

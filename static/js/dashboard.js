@@ -19,6 +19,7 @@ let scoreByWard = {};
 let tableSort = { key: 'overall_score', dir: -1 };
 
 const man = v => (v / 10000).toFixed(1) + '万';
+const regionName = r => r.ward || r.city || r.prefecture || '-';
 function scoreColor(s) { return s >= 75 ? CHART.good : s >= 60 ? CHART.primary : s >= 45 ? CHART.warn : CHART.bad; }
 function regionGroup(r) {
   if (r.prefecture === '東京都') return '東京23区';
@@ -54,7 +55,7 @@ function valueMap() {
   const series = Object.entries(groups).map(([g, arr]) => ({
     name: g, type: 'scatter', symbolSize: 15,
     itemStyle: { color: GROUP_COLOR[g], opacity: 0.82, borderColor: '#fff', borderWidth: 1 },
-    data: arr.map(r => ({ value: [r.avg_rent, r.overall_score], name: r.ward || r.city })),
+    data: arr.map(r => ({ value: [r.avg_rent, r.overall_score], name: regionName(r) })),
     markLine: g === Object.keys(groups)[0] ? {
       silent: true, symbol: 'none', lineStyle: { color: CHART.textMuted, type: 'dashed' },
       label: { color: CHART.textMuted, fontSize: 10 },
@@ -63,7 +64,7 @@ function valueMap() {
   }));
   echarts.init(el).setOption({
     ...BASE_OPTION,
-    grid: { top: 20, right: 24, bottom: 60, left: 56, containLabel: true },
+    grid: { top: 40, right: 24, bottom: 60, left: 56, containLabel: true },
     legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 12 } },
     tooltip: { formatter: p => `${p.data.name}<br/>相場 ${p.data.value[0].toLocaleString()}円<br/>総合評価 ${p.data.value[1]}` },
     xAxis: { type: 'value', name: '相場(円)', nameLocation: 'middle', nameGap: 34, axisLabel: { color: CHART.textMuted, formatter: v => (v / 10000) + '万' }, splitLine: { lineStyle: { color: CHART.border } } },
@@ -92,12 +93,12 @@ function renderRegionRadar() {
   const series = [];
   for (const sel of [s1, s2]) {
     if (!sel) continue;
-    const r = regionData.find(x => (x.ward || x.city) === sel);
+    const r = regionData.find(x => regionName(x) === sel);
     if (!r) continue;
     const i = series.length;
     series.push({
       value: [r.safety_score, r.convenience_score, r.environment_score, Math.round((r.avg_rent || 0) / 300000 * 100)],
-      name: r.ward || r.city,
+      name: regionName(r),
       itemStyle: { color: CHART.palette[i % CHART.palette.length] },
     });
   }
@@ -119,11 +120,11 @@ function renderTable() {
   if (!tbody) return;
   const rows = [...regionData].sort((a, b) => {
     const k = tableSort.key;
-    if (k === 'name') return ((a.ward || a.city) > (b.ward || b.city) ? 1 : -1) * tableSort.dir;
+    if (k === 'name') return (regionName(a) > regionName(b) ? 1 : -1) * tableSort.dir;
     return ((a[k] || 0) - (b[k] || 0)) * tableSort.dir;
   });
   tbody.innerHTML = rows.map(r => `<tr>
-    <td style="font-weight:600;color:var(--text-primary);">${r.ward || r.city}</td>
+    <td style="font-weight:600;color:var(--text-primary);">${regionName(r)}</td>
     <td>${r.avg_rent ? man(r.avg_rent) : '-'}</td>
     <td>${scoreBar(r.overall_score)}</td>
     <td>${scoreBar(r.safety_score)}</td>
@@ -140,7 +141,7 @@ async function load() {
   const d = await (await fetch('/api/dashboard')).json();
   regionData = d.regions || [];
   scoreByWard = {};
-  regionData.forEach(r => { scoreByWard[r.ward || r.city] = r.overall_score; });
+  regionData.forEach(r => { scoreByWard[regionName(r)] = r.overall_score; });
 
   const s = d.area_summary || {};
   document.getElementById('metrics').innerHTML = [
@@ -155,11 +156,11 @@ async function load() {
   bar('chart-yokohama-rent', d.yokohama_region_rent);
 
   const opts = '<option value="">エリアを選択...</option>' +
-    regionData.map(r => `<option value="${r.ward || r.city}">${r.ward || r.city}</option>`).join('');
+    regionData.map(r => `<option value="${regionName(r)}">${regionName(r)}</option>`).join('');
   document.getElementById('region-selector-1').innerHTML = opts;
   document.getElementById('region-selector-2').innerHTML = opts;
-  if (regionData.length > 0) document.getElementById('region-selector-1').value = regionData[0].ward || regionData[0].city;
-  if (regionData.length > 5) document.getElementById('region-selector-2').value = regionData[5].ward || regionData[5].city;
+  if (regionData.length > 0) document.getElementById('region-selector-1').value = regionName(regionData[0]);
+  if (regionData.length > 5) document.getElementById('region-selector-2').value = regionName(regionData[5]);
   renderRegionRadar();
 
   renderTable();
