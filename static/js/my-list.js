@@ -341,6 +341,9 @@ function reportHtml(l, region) {
   // エリア評価(0~100 展示分,独立卡片,不计入房源评分)
   if (region) {
     const sc = (score, label, level) => `<div class="metric"><div class="num" style="font-size:22px;color:${scoreColor(score ?? 50)};">${score ?? '-'}</div><div class="label">${label}${level ? ` (${level})` : ''}</div></div>`;
+    const tradeMetric = region.trade_price_per_m2
+      ? `<div class="metric"><div class="num" style="font-size:22px;">${(region.trade_price_per_m2 / 10000).toFixed(0)}<span style="font-size:13px;">万/㎡</span></div><div class="label">取引価格 (中古M・${region.trade_count}件)</div></div>`
+      : '';
     html += `
     <div class="card">
       <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
@@ -349,7 +352,9 @@ function reportHtml(l, region) {
         ${sc(region.safety_score, '治安', region.safety_level)}
         ${sc(region.convenience_score, '便利', region.convenience_level)}
         ${sc(region.environment_score, '住環境', region.environment_level)}
+        ${tradeMetric}
       </div>
+      ${region.trade_price_per_m2 ? '<p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">取引価格: 国土交通省 不動産情報ライブラリ (直近4四半期の中央値)</p>' : ''}
     </div>`;
   }
 

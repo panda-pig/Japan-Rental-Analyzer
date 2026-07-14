@@ -160,6 +160,16 @@ CREATE TABLE IF NOT EXISTS region_stats (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 区域公开数据缓存表 (Phase B: 国土交通省 不動産情報ライブラリ)
+CREATE TABLE IF NOT EXISTS region_public_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ward TEXT,
+    data_type TEXT,        -- transaction_price / land_price / hazard / facility
+    payload TEXT,          -- JSON 聚合结果
+    source TEXT,           -- reinfolib XIT001 等
+    fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_listings_hash ON rental_listings(listing_hash);
 CREATE INDEX IF NOT EXISTS idx_listings_platform ON rental_listings(platform);

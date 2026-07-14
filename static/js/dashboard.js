@@ -126,6 +126,7 @@ function renderTable() {
   tbody.innerHTML = rows.map(r => `<tr>
     <td style="font-weight:600;color:var(--text-primary);">${regionName(r)}</td>
     <td>${r.avg_rent ? man(r.avg_rent) : '-'}</td>
+    <td title="${r.trade_count ? `直近4四半期 ${r.trade_count}件 (中古マンション等, 出典: 不動産情報ライブラリ)` : ''}">${r.trade_price_per_m2 ? man(r.trade_price_per_m2) : '-'}</td>
     <td>${scoreBar(r.overall_score)}</td>
     <td>${scoreBar(r.safety_score)}</td>
     <td>${scoreBar(r.convenience_score)}</td>

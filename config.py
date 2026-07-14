@@ -6,6 +6,10 @@ load_dotenv()
 NAVITIME_CLIENT_KEY = os.getenv("NAVITIME_CLIENT_KEY", "")
 NAVITIME_ENABLED = bool(NAVITIME_CLIENT_KEY)
 
+# 国土交通省 不動産情報ライブラリ API (Phase B, 未设置时公开数据功能自动降级)
+REINFOLIB_API_KEY = os.getenv("REINFOLIB_API_KEY", "")
+REINFOLIB_ENABLED = bool(REINFOLIB_API_KEY)
+
 DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "db", "database.db"))
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 
