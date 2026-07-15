@@ -279,6 +279,10 @@ body {
   background: var(--warn-bg, #FEF3E2);
   color: var(--warn, #D97706);
 }
+.tag.bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
 
 /* ===== Buttons ===== */
 .btn {

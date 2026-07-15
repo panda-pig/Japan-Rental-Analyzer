@@ -344,6 +344,11 @@ function reportHtml(l, region) {
     const tradeMetric = region.trade_price_per_m2
       ? `<div class="metric"><div class="num" style="font-size:22px;">${(region.trade_price_per_m2 / 10000).toFixed(0)}<span style="font-size:13px;">万/㎡</span></div><div class="label">取引価格 (中古M・${region.trade_count}件)</div></div>`
       : '';
+    const FLOOD_LABELS = { 0: '想定なし', 1: '~0.5m', 2: '0.5~3m', 3: '3~5m', 4: '5~10m', 5: '10~20m', 6: '20m~' };
+    const hzColor = region.hazard_level === '高' ? COLORS.bad : region.hazard_level === '中' ? COLORS.warn : COLORS.good;
+    const hazardMetric = region.hazard_level
+      ? `<div class="metric"><div class="num" style="font-size:22px;color:${hzColor};">${region.hazard_level}</div><div class="label">災害 (洪水${FLOOD_LABELS[region.flood_rank || 0]}・土砂${region.sediment_count || 0}件)</div></div>`
+      : '';
     html += `
     <div class="card">
       <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
@@ -353,8 +358,9 @@ function reportHtml(l, region) {
         ${sc(region.convenience_score, '便利', region.convenience_level)}
         ${sc(region.environment_score, '住環境', region.environment_level)}
         ${tradeMetric}
+        ${hazardMetric}
       </div>
-      ${region.trade_price_per_m2 ? '<p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">取引価格: 国土交通省 不動産情報ライブラリ (直近4四半期の中央値)</p>' : ''}
+      ${(region.trade_price_per_m2 || region.hazard_level) ? '<p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">取引価格・災害: 国土交通省 不動産情報ライブラリ (災害は区役所周辺の参考値)</p>' : ''}
     </div>`;
   }
 

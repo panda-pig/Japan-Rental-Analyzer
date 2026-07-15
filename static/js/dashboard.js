@@ -118,9 +118,11 @@ function scoreBar(s) {
 function renderTable() {
   const tbody = document.querySelector('#region-table tbody');
   if (!tbody) return;
+  const HAZ_ORDER = { '高': 3, '中': 2, '低': 1 };
   const rows = [...regionData].sort((a, b) => {
     const k = tableSort.key;
     if (k === 'name') return (regionName(a) > regionName(b) ? 1 : -1) * tableSort.dir;
+    if (k === 'hazard_level') return ((HAZ_ORDER[a.hazard_level] || 0) - (HAZ_ORDER[b.hazard_level] || 0)) * tableSort.dir;
     return ((a[k] || 0) - (b[k] || 0)) * tableSort.dir;
   });
   tbody.innerHTML = rows.map(r => `<tr>
@@ -131,6 +133,7 @@ function renderTable() {
     <td>${scoreBar(r.safety_score)}</td>
     <td>${scoreBar(r.convenience_score)}</td>
     <td>${scoreBar(r.environment_score)}</td>
+    <td>${r.hazard_level ? `<span class="tag ${r.hazard_level === '高' ? 'bad' : r.hazard_level === '中' ? 'warn' : 'good'}" title="洪水・土砂 (出典: 不動産情報ライブラリ, 区役所周辺の参考値)">${r.hazard_level}</span>` : '-'}</td>
   </tr>`).join('');
 }
 
