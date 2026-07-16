@@ -364,6 +364,26 @@ function reportHtml(l, region) {
     </div>`;
   }
 
+  // 最寄駅の住民評価 (まちむすび, 表示専用)
+  if (l.st_avg != null) {
+    const starColor = v => v >= 4 ? COLORS.good : v >= 3.5 ? COLORS.primary : v >= 3 ? COLORS.warn : COLORS.bad;
+    const stM = (v, label) => v == null ? '' :
+      `<div class="metric"><div class="num" style="font-size:22px;color:${starColor(v)};">${v.toFixed(1)}</div><div class="label">${label} /5</div></div>`;
+    html += `
+    <div class="card">
+      <h2>最寄駅の住民評価 <span class="tag muted">${l.nearest_station || ''}駅・スコア対象外</span></h2>
+      <div class="metric-grid" style="margin-top:12px;">
+        ${stM(l.st_avg, '総合')}
+        ${stM(l.st_transport, '交通の利便性')}
+        ${stM(l.st_safety, '治安の良さ')}
+        ${stM(l.st_shopping, '買い物')}
+        ${stM(l.st_childcare, '子育て')}
+        ${stM(l.st_nature, '自然の多さ')}
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">出典: LIFULL HOME'S「まちむすび」住民アンケート集計値 (5点満点)</p>
+    </div>`;
+  }
+
   if (l.total_score != null) {
     html += `<div class="card"><h2>スコアレーダー <span style="font-size:12px;font-weight:400;color:var(--text-muted);">8次元評価</span></h2><div id="chart-radar-single" class="chart"></div></div>`;
     html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;

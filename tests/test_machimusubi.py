@@ -1,0 +1,38 @@
+"""まちむすび スコア抽出のユニットテスト (構造非依存の近傍マッチを検証)。"""
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scrapers.machimusubi import parse_station_scores, normalize_station
+
+SYNTH = """
+<html><body>
+<h2>住みやすさアンケート</h2>
+<ul>
+  <li><span class="label">交通の利便性</span><svg>...</svg><span class="pt">4.3</span></li>
+  <li><span class="label">治安の良さ</span><span class="pt">4.2</span></li>
+  <li><span class="label">買い物のしやすさ</span><span class="pt">3.7</span></li>
+  <li><span class="label">子育てのしやすさ</span><span class="pt">3.6</span></li>
+  <li><span class="label">自然の多さ</span><span class="pt">3.2</span></li>
+</ul>
+<script>var noise = {"交通の利便性": 9.9};</script>
+</body></html>
+"""
+
+
+def test_parse_station_scores():
+    s = parse_station_scores(SYNTH)
+    assert s == {"transport": 4.3, "safety": 4.2, "shopping": 3.7,
+                 "childcare": 3.6, "nature": 3.2}
+
+
+def test_parse_missing_returns_partial():
+    s = parse_station_scores("<p>交通の利便性 4.0</p><p>治安の良さ n/a</p>")
+    assert s == {"transport": 4.0}
+
+
+def test_normalize_station():
+    assert normalize_station("東神奈川駅") == "東神奈川"
+    assert normalize_station(" 横浜 ") == "横浜"
+    assert normalize_station("") is None
+    assert normalize_station(None) is None

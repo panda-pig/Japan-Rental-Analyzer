@@ -215,10 +215,13 @@ def api_my_list():
         s.station_score, s.age_score, s.initial_cost_score,
         r.avg_rent AS region_avg_rent, r.avg_area AS region_avg_area,
         r.avg_building_age AS region_avg_age,
+        sr.transport AS st_transport, sr.safety AS st_safety, sr.shopping AS st_shopping,
+        sr.childcare AS st_childcare, sr.nature AS st_nature, sr.avg_score AS st_avg,
         st.id AS fav_status_id, st.status AS fav_status
         FROM rental_listings l
         LEFT JOIN listing_scores s ON s.listing_id=l.id
         LEFT JOIN region_stats r ON l.ward = r.ward
+        LEFT JOIN station_reviews sr ON sr.station = REPLACE(l.nearest_station, '駅', '')
         LEFT JOIN listing_status st ON st.listing_id=l.id
         WHERE l.is_active=1 ORDER BY s.total_score DESC""")
 
@@ -268,6 +271,9 @@ def api_my_list():
         "age_score": l.get("age_score"), "initial_cost_score": l.get("initial_cost_score"),
         "region_avg_rent": l.get("region_avg_rent"),
         "region_avg_area": l.get("region_avg_area"), "region_avg_age": l.get("region_avg_age"),
+        "st_transport": l.get("st_transport"), "st_safety": l.get("st_safety"),
+        "st_shopping": l.get("st_shopping"), "st_childcare": l.get("st_childcare"),
+        "st_nature": l.get("st_nature"), "st_avg": l.get("st_avg"),
         "total_floors": l.get("total_floors"), "structure": l.get("structure"),
         "two_person_allowed": l.get("two_person_allowed"),
         "bath_toilet_separate": l.get("bath_toilet_separate"), "auto_lock": l.get("auto_lock"),
@@ -591,6 +597,14 @@ def api_import_detail():
 
     # 只算这一条(不重算全部,避免超时)
     _score_single(listing_id)
+
+    # Phase C: 最寄駅の住民評価を best-effort で取得 (失敗しても導入は成功扱い)
+    try:
+        from scrapers.machimusubi import get_station_review
+        if raw.nearest_station:
+            get_station_review(raw.nearest_station)
+    except Exception:
+        pass
 
     return jsonify({
         "status": status,

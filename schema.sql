@@ -160,6 +160,23 @@ CREATE TABLE IF NOT EXISTS region_stats (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 駅別 住民評価 (Phase C: LIFULL HOME'S まちむすび アンケート集計値, スコア対象外)
+CREATE TABLE IF NOT EXISTS machimusubi_stations (
+    station TEXT PRIMARY KEY,   -- 駅名(漢字, 「駅」なし)
+    url TEXT
+);
+CREATE TABLE IF NOT EXISTS station_reviews (
+    station TEXT PRIMARY KEY,   -- 駅名(漢字, 「駅」なし)
+    url TEXT,
+    transport REAL,             -- 交通の利便性 (5点満点)
+    safety REAL,                -- 治安の良さ
+    shopping REAL,              -- 買い物のしやすさ
+    childcare REAL,             -- 子育てのしやすさ
+    nature REAL,                -- 自然の多さ
+    avg_score REAL,
+    fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 区域公开数据缓存表 (Phase B: 国土交通省 不動産情報ライブラリ)
 CREATE TABLE IF NOT EXISTS region_public_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
