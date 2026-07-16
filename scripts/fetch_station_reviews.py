@@ -1,7 +1,10 @@
 """Phase C: 物件プール内の全最寄駅について まちむすび 住民評価を取得。
 
+初回は 駅名→URL マップを構築する (路線一覧→各路線ページ, ~90リクエスト,
+礼儀スリープ込みで数分かかる。2回目以降はキャッシュ利用で速い)。
+
 Run: python scripts/fetch_station_reviews.py [駅名...]
-  引数なし → rental_listings の nearest_station 全部
+  引数なし → rental_listings の nearest_station 全部 (表記ゆれは自動抽出)
   引数あり → 指定駅のみ (例: python scripts/fetch_station_reviews.py 東神奈川 横浜)
 """
 import sys
@@ -10,29 +13,30 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.init_db import init_db
 from db_helper import query_all, query_one
-from scrapers.machimusubi import ensure_station_map, get_station_review, normalize_station
+from scrapers.machimusubi import ensure_station_map, get_station_review, extract_station
 
 
 def main():
     init_db()
-    n = ensure_station_map(debug=True)
+    print("building station map (初回は数分かかります)...")
+    n = ensure_station_map(build=True, debug=True)
     print(f"station map: {n} 駅")
     if n == 0:
-        print("NG: index ページから駅リンクを取得できませんでした (上のログを確認)")
+        print("NG: 路線ページから駅リンクを取得できませんでした (上のログを確認)")
         return
 
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if args:
-        stations = [normalize_station(a) for a in args]
+        stations = [extract_station(a) for a in args]
     else:
-        stations = sorted({normalize_station(r["nearest_station"])
+        stations = sorted({extract_station(r["nearest_station"])
                            for r in query_all("SELECT DISTINCT nearest_station FROM rental_listings "
                                               "WHERE nearest_station IS NOT NULL")} - {None})
     print(f"target stations: {stations or '(なし: 物件プールが空)'}")
 
     ok = miss = 0
     for st in stations:
-        r = get_station_review(st)
+        r = get_station_review(st, build_map=True)
         if r:
             ok += 1
             print(f"  {st}: 交通{r['transport']} 治安{r['safety']} 買物{r['shopping']} "

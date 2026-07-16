@@ -6,8 +6,10 @@
 robots.txt は /machimusubi/ を許可 (sitemap にも掲載)。fetch_html 経由で
 robots チェック + UA + 礼儀スリープを適用。表示専用でスコア対象外。
 
-駅名(漢字) → URL の対応は都道府県インデックスページのアンカーから構築し
-machimusubi_stations にキャッシュする。
+駅名(漢字) → URL の対応:
+  /machimusubi/{pref}/line/ (路線一覧) → 各路線ページ → 駅アンカー(漢字, 駅なし)
+  の2段階で構築し machimusubi_stations にキャッシュ。構築は重い(~90リクエスト)
+  ため batch スクリプトからのみ実行 (build=True)。import フックは既存マップのみ参照。
 """
 import re
 import sys
@@ -18,9 +20,9 @@ from scrapers.base import fetch_html
 from db_helper import query_all, query_one, execute
 
 BASE = "https://www.homes.co.jp"
-INDEX_PAGES = [f"{BASE}/machimusubi/tokyo/", f"{BASE}/machimusubi/kanagawa/"]
+LINE_INDEX_PAGES = [f"{BASE}/machimusubi/tokyo/line/", f"{BASE}/machimusubi/kanagawa/line/"]
 
-# カテゴリ名 → DB列。ページ上の表記ゆれに regex で対応。
+# カテゴリ名 → DB列
 CATEGORIES = [
     ("transport", r"交通の利便性"),
     ("safety", r"治安の良さ"),
@@ -28,43 +30,73 @@ CATEGORIES = [
     ("childcare", r"子育てのしやすさ"),
     ("nature", r"自然の多さ"),
 ]
-_ANCHOR_RE = re.compile(r'href="(/machimusubi/[a-z]+/[a-z0-9_]+-st/)"[^>]*>([^<]{1,30}?)駅?\s*<', re.S)
+_LINE_RE = re.compile(r'href="(?:https://www\.homes\.co\.jp)?(/machimusubi/[a-z]+/[a-z0-9_]+-line/)"')
+_ST_ANCHOR_RE = re.compile(
+    r'<a[^>]+href="(?:https://www\.homes\.co\.jp)?(/machimusubi/[a-z]+/[a-z0-9_]+-st/)"[^>]*>'
+    r'\s*(?:<[^>]+>\s*)*([^<>]{1,15}?)\s*(?:駅)?\s*(?:<|$)', re.S)
 
 
 def normalize_station(name):
     """「東神奈川駅」「東神奈川」→「東神奈川」。"""
     if not name:
         return None
-    return re.sub(r"駅$", "", name.strip()) or None
+    return re.sub(r"駅$", "", str(name).strip()) or None
 
 
-_map_failed = False  # プロセス内で index 取得に失敗したら以後スキップ (ローカル開発で import を遅くしない)
+def extract_station(raw):
+    """nearest_station の表記ゆれから最寄駅名を1つ取り出す。
+
+    例: 'ＪＲ山手線/東京駅 歩10分東京メトロ日比谷線/八丁堀駅 歩3分' → '八丁堀' (徒歩最短)
+        '東神奈川' → '東神奈川'
+    """
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if "駅" not in s:
+        return normalize_station(s)
+    # (駅名, 徒歩分) を列挙して徒歩最短を選ぶ
+    pairs = re.findall(r"([^/\s線]{1,12}?)駅\s*(?:歩|徒歩)?\s*(\d{1,3})\s*分", s)
+    if pairs:
+        return min(pairs, key=lambda p: int(p[1]))[0]
+    m = re.search(r"([^/\s線]{1,12}?)駅", s)
+    return m.group(1) if m else normalize_station(s)
 
 
-def ensure_station_map(force=False, debug=False):
-    """駅名→URL マップを index ページから構築 (空のときのみ)。件数を返す。"""
+_map_failed = False  # プロセス内で構築失敗したら以後スキップ
+
+
+def ensure_station_map(build=False, debug=False):
+    """駅名→URL マップ件数を返す。build=True のときのみ未構築なら構築 (重い)。"""
     global _map_failed
     n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
-    if n > 0 and not force:
+    if n > 0 or not build or _map_failed:
         return n
-    if _map_failed and not force:
-        return 0
-    total = 0
-    for idx_url in INDEX_PAGES:
-        html = fetch_html(idx_url)
+    line_urls = []
+    for idx in LINE_INDEX_PAGES:
+        html = fetch_html(idx)
         if not html:
-            print(f"  machimusubi index fetch failed: {idx_url}")
+            print(f"  machimusubi line index fetch failed: {idx}")
             continue
-        pairs = _ANCHOR_RE.findall(html)
+        found = sorted(set(_LINE_RE.findall(html)))
         if debug:
-            print(f"  {idx_url}: {len(pairs)} anchors, sample: {pairs[:5]}")
-        for path, name in pairs:
-            name = normalize_station(re.sub(r"<[^>]+>", "", name))
-            if not name:
-                continue
-            execute("INSERT OR REPLACE INTO machimusubi_stations (station, url) VALUES (?,?)",
-                    (name, BASE + path))
-            total += 1
+            print(f"  {idx}: {len(found)} lines")
+        line_urls.extend(found)
+    if not line_urls:
+        _map_failed = True
+        return 0
+    for i, path in enumerate(line_urls):
+        html = fetch_html(BASE + path)
+        if not html:
+            continue
+        pairs = _ST_ANCHOR_RE.findall(html)
+        for st_path, name in pairs:
+            name = normalize_station(name)
+            if name and re.search(r"[぀-ヿ一-鿿]", name):  # 和文の駅名のみ
+                execute("INSERT OR REPLACE INTO machimusubi_stations (station, url) VALUES (?,?)",
+                        (name, BASE + st_path))
+        if debug and i % 10 == 0:
+            c = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
+            print(f"  lines {i + 1}/{len(line_urls)} ... {c} 駅")
     n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
     if n == 0:
         _map_failed = True
@@ -86,9 +118,9 @@ def parse_station_scores(html):
     return scores
 
 
-def get_station_review(station, max_age_days=90):
+def get_station_review(station, max_age_days=90, build_map=False):
     """キャッシュ優先で駅の住民評価を返す。無ければ取得を試みる (失敗時 None)。"""
-    station = normalize_station(station)
+    station = extract_station(station)
     if not station:
         return None
     row = query_one(
@@ -96,7 +128,7 @@ def get_station_review(station, max_age_days=90):
         (station, f"-{max_age_days} days"))
     if row:
         return row if row.get("avg_score") else None  # 取得失敗もキャッシュ(再攻撃防止)
-    if ensure_station_map() == 0:
+    if ensure_station_map(build=build_map) == 0:
         return None
     hit = query_one("SELECT url FROM machimusubi_stations WHERE station=?", (station,))
     if not hit:

@@ -371,7 +371,7 @@ function reportHtml(l, region) {
       `<div class="metric"><div class="num" style="font-size:22px;color:${starColor(v)};">${v.toFixed(1)}</div><div class="label">${label} /5</div></div>`;
     html += `
     <div class="card">
-      <h2>最寄駅の住民評価 <span class="tag muted">${l.nearest_station || ''}駅・スコア対象外</span></h2>
+      <h2>最寄駅の住民評価 <span class="tag muted">${l.st_station || ''}駅・スコア対象外</span></h2>
       <div class="metric-grid" style="margin-top:12px;">
         ${stM(l.st_avg, '総合')}
         ${stM(l.st_transport, '交通の利便性')}

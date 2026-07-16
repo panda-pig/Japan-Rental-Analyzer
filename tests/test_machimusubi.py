@@ -3,7 +3,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scrapers.machimusubi import parse_station_scores, normalize_station
+from scrapers.machimusubi import parse_station_scores, normalize_station, extract_station
 
 SYNTH = """
 <html><body>
@@ -36,3 +36,20 @@ def test_normalize_station():
     assert normalize_station(" 横浜 ") == "横浜"
     assert normalize_station("") is None
     assert normalize_station(None) is None
+
+
+def test_extract_station_clean():
+    assert extract_station("東神奈川") == "東神奈川"
+    assert extract_station("東神奈川駅") == "東神奈川"
+    assert extract_station(None) is None
+
+
+def test_extract_station_dirty_picks_min_walk():
+    # 本番データで確認された表記 (SUUMO 詳細の交通ブロックまるごと)
+    raw = "ＪＲ山手線/東京駅 歩10分東京メトロ銀座線/京橋駅 歩7分東京メトロ日比谷線/八丁堀駅 歩3分"
+    assert extract_station(raw) == "八丁堀"
+
+
+def test_extract_station_single_with_walk():
+    assert extract_station("京急本線/仲木戸駅 歩5分") == "仲木戸"
+    assert extract_station("東急東横線/白楽駅 徒歩8分") == "白楽"
