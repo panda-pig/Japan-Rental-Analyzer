@@ -6,22 +6,24 @@
 robots.txt は /machimusubi/ を許可 (sitemap にも掲載)。fetch_html 経由で
 robots チェック + UA + 礼儀スリープを適用。表示専用でスコア対象外。
 
-駅名(漢字) → URL の対応:
-  /machimusubi/{pref}/line/ (路線一覧) → 各路線ページ → 駅アンカー(漢字, 駅なし)
-  の2段階で構築し machimusubi_stations にキャッシュ。構築は重い(~90リクエスト)
-  ため batch スクリプトからのみ実行 (build=True)。import フックは既存マップのみ参照。
+駅 URL の解決 (バルククロールなし):
+  sitemap-station.xml を1リクエスト取得 → slug (ローマ字) を machimusubi_stations
+  にキャッシュ → 漢字駅名は pykakasi でローマ字化し正規化して slug と照合。
+  レビュー取得は 1駅 = 1リクエストのオンデマンドのみ (レート制限に強い)。
 """
 import re
 import sys
 import os
 import time
+import difflib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scrapers.base import fetch_html
 from db_helper import query_all, query_one, execute
 
 BASE = "https://www.homes.co.jp"
-LINE_INDEX_PAGES = [f"{BASE}/machimusubi/tokyo/line/", f"{BASE}/machimusubi/kanagawa/line/"]
+SITEMAP_URL = f"{BASE}/machimusubi/sitemap-station.xml"
+_ST_URL_RE = re.compile(r"https://www\.homes\.co\.jp/machimusubi/(tokyo|kanagawa)/([a-z0-9]+)_(\d+)-st/")
 
 # カテゴリ名 → DB列
 CATEGORIES = [
@@ -31,10 +33,11 @@ CATEGORIES = [
     ("childcare", r"子育てのしやすさ"),
     ("nature", r"自然の多さ"),
 ]
-_LINE_RE = re.compile(r'href="(?:https://www\.homes\.co\.jp)?(/machimusubi/[a-z]+/[a-z0-9_]+-line/)"')
-_ST_ANCHOR_RE = re.compile(
-    r'<a[^>]+href="(?:https://www\.homes\.co\.jp)?(/machimusubi/[a-z]+/[a-z0-9_]+-st/)"[^>]*>'
-    r'\s*(?:<[^>]+>\s*)*([^<>]{1,15}?)\s*(?:駅)?\s*(?:<|$)', re.S)
+
+MIN_MAP_SIZE = 150   # 東京+神奈川で数百駅のはず。これ未満は不完全とみなす
+_map_failed = False  # プロセス内で構築失敗したら以後スキップ
+_kks = None          # pykakasi は初回のみ初期化
+_slug_index = None   # {正規化slug: url} のメモリキャッシュ
 
 
 def normalize_station(name):
@@ -55,7 +58,6 @@ def extract_station(raw):
     s = str(raw).strip()
     if "駅" not in s:
         return normalize_station(s)
-    # (駅名, 徒歩分) を列挙して徒歩最短を選ぶ
     pairs = re.findall(r"([^/\s線]{1,12}?)駅\s*(?:歩|徒歩)?\s*(\d{1,3})\s*分", s)
     if pairs:
         return min(pairs, key=lambda p: int(p[1]))[0]
@@ -63,9 +65,21 @@ def extract_station(raw):
     return m.group(1) if m else normalize_station(s)
 
 
-_map_failed = False  # プロセス内で構築失敗したら以後スキップ
-MIN_MAP_SIZE = 200   # 東京+神奈川で ~900 駅のはず。これ未満は不完全とみなす
-MAX_CONSEC_FAIL = 8  # 連続失敗がこの数に達したら今回の構築を打ち切る (ブロック対策)
+def _normalize_romaji(s):
+    """ローマ字表記ゆれの正規化 (長音のばし・撥音・促音を slug 流儀に揃える)。"""
+    s = re.sub(r"[^a-z]", "", s.lower())
+    for a, b in (("ou", "o"), ("uu", "u"), ("oo", "o"), ("aa", "a"), ("ee", "e"),
+                 ("nb", "mb"), ("np", "mp"), ("cch", "tch")):
+        s = s.replace(a, b)
+    return s
+
+
+def _romaji(name):
+    global _kks
+    if _kks is None:
+        import pykakasi
+        _kks = pykakasi.kakasi()
+    return _normalize_romaji("".join(x["hepburn"] for x in _kks.convert(name)))
 
 
 def _fetch_retry(url, retries=2, backoff=6):
@@ -80,51 +94,47 @@ def _fetch_retry(url, retries=2, backoff=6):
 
 
 def ensure_station_map(build=False, debug=False):
-    """駅名→URL マップ件数を返す。build=True のとき不完全なら追加構築 (重い)。
-
-    再実行で続きから埋まる (既存行は消さない / INSERT OR REPLACE)。
-    ブロックが疑われる連続失敗時は早期打ち切りし, 次回実行で継続。
-    """
-    global _map_failed
+    """駅 slug→URL マップ件数を返す。build=True のとき未構築なら sitemap から構築 (1リクエスト)。"""
+    global _map_failed, _slug_index
     n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
     if n >= MIN_MAP_SIZE or not build or _map_failed:
         return n
-    if n > 0:
-        print(f"  station map が不完全 ({n} 駅 < {MIN_MAP_SIZE}) → 続きを構築します (既存は保持)")
-    line_urls = []
-    for idx in LINE_INDEX_PAGES:
-        html = _fetch_retry(idx)
-        if not html:
-            print(f"  machimusubi line index fetch failed: {idx}")
-            continue
-        found = sorted(set(_LINE_RE.findall(html)))
-        if debug:
-            print(f"  {idx}: {len(found)} lines")
-        line_urls.extend(found)
-    if not line_urls:
+    xml = _fetch_retry(SITEMAP_URL)
+    if not xml:
+        print(f"  machimusubi sitemap fetch failed: {SITEMAP_URL}")
         _map_failed = True
         return n
-    consec_fail = 0
-    for i, path in enumerate(line_urls):
-        html = _fetch_retry(BASE + path)
-        if not html:
-            consec_fail += 1
-            print(f"  line fetch failed ({consec_fail}連続): {path}")
-            if consec_fail >= MAX_CONSEC_FAIL:
-                print(f"  連続失敗が多いため今回は打ち切り (再実行で続きから構築されます)")
-                break
-            continue
-        consec_fail = 0
-        pairs = _ST_ANCHOR_RE.findall(html)
-        for st_path, name in pairs:
-            name = normalize_station(name)
-            if name and re.search(r"[぀-ヿ一-鿿]", name):  # 和文の駅名のみ
-                execute("INSERT OR REPLACE INTO machimusubi_stations (station, url) VALUES (?,?)",
-                        (name, BASE + st_path))
-        if debug and i % 10 == 0:
-            c = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
-            print(f"  lines {i + 1}/{len(line_urls)} ... {c} 駅")
-    return query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
+    if n > 0:
+        execute("DELETE FROM machimusubi_stations")  # 旧形式(漢字キー等)を一掃
+    found = _ST_URL_RE.findall(xml)
+    for pref, slug, sid in found:
+        execute("INSERT OR REPLACE INTO machimusubi_stations (station, url) VALUES (?,?)",
+                (slug, f"{BASE}/machimusubi/{pref}/{slug}_{sid}-st/"))
+    _slug_index = None
+    n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
+    if debug:
+        print(f"  sitemap: {len(found)} 駅URL (東京/神奈川) → map {n} 駅")
+    if n == 0:
+        _map_failed = True
+    return n
+
+
+def _resolve_url(station_kanji):
+    """漢字駅名 → まちむすび駅ページ URL (ローマ字化 + 正規化 + 近似照合)。"""
+    global _slug_index
+    if _slug_index is None:
+        _slug_index = {}
+        for r in query_all("SELECT station, url FROM machimusubi_stations"):
+            _slug_index.setdefault(_normalize_romaji(r["station"]), r["url"])
+    if not _slug_index:
+        return None
+    cand = _romaji(station_kanji)
+    if not cand:
+        return None
+    if cand in _slug_index:
+        return _slug_index[cand]
+    close = difflib.get_close_matches(cand, _slug_index.keys(), n=1, cutoff=0.86)
+    return _slug_index[close[0]] if close else None
 
 
 def parse_station_scores(html):
@@ -151,13 +161,13 @@ def get_station_review(station, max_age_days=90, build_map=False):
         "SELECT * FROM station_reviews WHERE station=? AND fetched_at > datetime('now', ?)",
         (station, f"-{max_age_days} days"))
     if row:
-        return row if row.get("avg_score") else None  # 取得失敗もキャッシュ(再攻撃防止)
+        return row if row.get("avg_score") else None  # スコア無し駅もキャッシュ(連打防止)
     if ensure_station_map(build=build_map) == 0:
         return None
-    hit = query_one("SELECT url FROM machimusubi_stations WHERE station=?", (station,))
-    if not hit:
+    url = _resolve_url(station)
+    if not url:
         return None
-    html = _fetch_retry(hit["url"])
+    html = _fetch_retry(url)
     if html is None:
         return None  # ネットワーク/レート制限: キャッシュせず次回再試行
     scores = parse_station_scores(html)
@@ -166,10 +176,10 @@ def get_station_review(station, max_age_days=90, build_map=False):
         execute("""INSERT OR REPLACE INTO station_reviews
             (station, url, transport, safety, shopping, childcare, nature, avg_score, fetched_at)
             VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
-            (station, hit["url"], scores.get("transport"), scores.get("safety"),
+            (station, url, scores.get("transport"), scores.get("safety"),
              scores.get("shopping"), scores.get("childcare"), scores.get("nature"), avg))
         return query_one("SELECT * FROM station_reviews WHERE station=?", (station,))
     # ページは取れたがスコアが無い駅 (アンケート未実施等) → 記録して連打を防ぐ
     execute("INSERT OR REPLACE INTO station_reviews (station, url, avg_score, fetched_at) "
-            "VALUES (?,?,NULL,CURRENT_TIMESTAMP)", (station, hit["url"]))
+            "VALUES (?,?,NULL,CURRENT_TIMESTAMP)", (station, url))
     return None

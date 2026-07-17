@@ -3,7 +3,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scrapers.machimusubi import parse_station_scores, normalize_station, extract_station
+from scrapers.machimusubi import (parse_station_scores, normalize_station,
+                                  extract_station, _romaji, _normalize_romaji)
 
 SYNTH = """
 <html><body>
@@ -53,3 +54,20 @@ def test_extract_station_dirty_picks_min_walk():
 def test_extract_station_single_with_walk():
     assert extract_station("京急本線/仲木戸駅 歩5分") == "仲木戸"
     assert extract_station("東急東横線/白楽駅 徒歩8分") == "白楽"
+
+
+def test_romaji_matches_slug_conventions():
+    # 漢字駅名 → まちむすび slug 流儀の正規化ローマ字
+    assert _romaji("八丁堀") == "hatchobori"
+    assert _romaji("東京") == "tokyo"
+    assert _romaji("京橋") == "kyobashi"
+    assert _romaji("新橋") == "shimbashi"      # nb → mb
+    assert _romaji("大倉山") == "okurayama"     # oo → o
+    assert _romaji("自由が丘") == "jiyugaoka"   # uu → u
+    assert _romaji("東神奈川") == "higashikanagawa"
+
+
+def test_normalize_romaji_slug_side():
+    # slug 側も同じ正規化を通すので表記ゆれが揃う
+    assert _normalize_romaji("hatchobori") == "hatchobori"
+    assert _normalize_romaji("shimbashi") == "shimbashi"
