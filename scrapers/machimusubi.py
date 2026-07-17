@@ -63,14 +63,18 @@ def extract_station(raw):
 
 
 _map_failed = False  # プロセス内で構築失敗したら以後スキップ
+MIN_MAP_SIZE = 200   # 東京+神奈川で ~900 駅のはず。これ未満は不完全とみなし再構築
 
 
 def ensure_station_map(build=False, debug=False):
-    """駅名→URL マップ件数を返す。build=True のときのみ未構築なら構築 (重い)。"""
+    """駅名→URL マップ件数を返す。build=True のときのみ未構築/不完全なら構築 (重い)。"""
     global _map_failed
     n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
-    if n > 0 or not build or _map_failed:
+    if n >= MIN_MAP_SIZE or not build or _map_failed:
         return n
+    if n > 0:
+        print(f"  station map が不完全 ({n} 駅 < {MIN_MAP_SIZE}) → 再構築します")
+        execute("DELETE FROM machimusubi_stations")
     line_urls = []
     for idx in LINE_INDEX_PAGES:
         html = fetch_html(idx)
