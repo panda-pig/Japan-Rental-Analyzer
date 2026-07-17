@@ -24,6 +24,8 @@ def main():
     if n == 0:
         print("NG: 路線ページから駅リンクを取得できませんでした (上のログを確認)")
         return
+    if n < 200:
+        print("注意: map は未完成です。時間を置いて再実行すると続きから構築されます。")
 
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if args:
@@ -36,7 +38,7 @@ def main():
 
     ok = miss = 0
     for st in stations:
-        r = get_station_review(st, build_map=True)
+        r = get_station_review(st)  # map は上で構築済み (二重構築しない)
         if r:
             ok += 1
             print(f"  {st}: 交通{r['transport']} 治安{r['safety']} 買物{r['shopping']} "

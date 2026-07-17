@@ -14,6 +14,7 @@ robots チェック + UA + 礼儀スリープを適用。表示専用でスコ�
 import re
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scrapers.base import fetch_html
@@ -63,21 +64,36 @@ def extract_station(raw):
 
 
 _map_failed = False  # プロセス内で構築失敗したら以後スキップ
-MIN_MAP_SIZE = 200   # 東京+神奈川で ~900 駅のはず。これ未満は不完全とみなし再構築
+MIN_MAP_SIZE = 200   # 東京+神奈川で ~900 駅のはず。これ未満は不完全とみなす
+MAX_CONSEC_FAIL = 8  # 連続失敗がこの数に達したら今回の構築を打ち切る (ブロック対策)
+
+
+def _fetch_retry(url, retries=2, backoff=6):
+    """fetch_html + 失敗時バックオフ再試行 (レート制限/瞬断対策)。"""
+    for i in range(retries + 1):
+        html = fetch_html(url)
+        if html:
+            return html
+        if i < retries:
+            time.sleep(backoff * (i + 1))
+    return None
 
 
 def ensure_station_map(build=False, debug=False):
-    """駅名→URL マップ件数を返す。build=True のときのみ未構築/不完全なら構築 (重い)。"""
+    """駅名→URL マップ件数を返す。build=True のとき不完全なら追加構築 (重い)。
+
+    再実行で続きから埋まる (既存行は消さない / INSERT OR REPLACE)。
+    ブロックが疑われる連続失敗時は早期打ち切りし, 次回実行で継続。
+    """
     global _map_failed
     n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
     if n >= MIN_MAP_SIZE or not build or _map_failed:
         return n
     if n > 0:
-        print(f"  station map が不完全 ({n} 駅 < {MIN_MAP_SIZE}) → 再構築します")
-        execute("DELETE FROM machimusubi_stations")
+        print(f"  station map が不完全 ({n} 駅 < {MIN_MAP_SIZE}) → 続きを構築します (既存は保持)")
     line_urls = []
     for idx in LINE_INDEX_PAGES:
-        html = fetch_html(idx)
+        html = _fetch_retry(idx)
         if not html:
             print(f"  machimusubi line index fetch failed: {idx}")
             continue
@@ -87,11 +103,18 @@ def ensure_station_map(build=False, debug=False):
         line_urls.extend(found)
     if not line_urls:
         _map_failed = True
-        return 0
+        return n
+    consec_fail = 0
     for i, path in enumerate(line_urls):
-        html = fetch_html(BASE + path)
+        html = _fetch_retry(BASE + path)
         if not html:
+            consec_fail += 1
+            print(f"  line fetch failed ({consec_fail}連続): {path}")
+            if consec_fail >= MAX_CONSEC_FAIL:
+                print(f"  連続失敗が多いため今回は打ち切り (再実行で続きから構築されます)")
+                break
             continue
+        consec_fail = 0
         pairs = _ST_ANCHOR_RE.findall(html)
         for st_path, name in pairs:
             name = normalize_station(name)
@@ -101,10 +124,7 @@ def ensure_station_map(build=False, debug=False):
         if debug and i % 10 == 0:
             c = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
             print(f"  lines {i + 1}/{len(line_urls)} ... {c} 駅")
-    n = query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
-    if n == 0:
-        _map_failed = True
-    return n
+    return query_one("SELECT COUNT(*) AS c FROM machimusubi_stations")["c"]
 
 
 def parse_station_scores(html):
@@ -137,8 +157,10 @@ def get_station_review(station, max_age_days=90, build_map=False):
     hit = query_one("SELECT url FROM machimusubi_stations WHERE station=?", (station,))
     if not hit:
         return None
-    html = fetch_html(hit["url"])
-    scores = parse_station_scores(html) if html else {}
+    html = _fetch_retry(hit["url"])
+    if html is None:
+        return None  # ネットワーク/レート制限: キャッシュせず次回再試行
+    scores = parse_station_scores(html)
     if len(scores) >= 3:
         avg = round(sum(scores.values()) / len(scores), 2)
         execute("""INSERT OR REPLACE INTO station_reviews
@@ -147,7 +169,7 @@ def get_station_review(station, max_age_days=90, build_map=False):
             (station, hit["url"], scores.get("transport"), scores.get("safety"),
              scores.get("shopping"), scores.get("childcare"), scores.get("nature"), avg))
         return query_one("SELECT * FROM station_reviews WHERE station=?", (station,))
-    # 失敗も記録して連打を防ぐ (avg_score NULL)
+    # ページは取れたがスコアが無い駅 (アンケート未実施等) → 記録して連打を防ぐ
     execute("INSERT OR REPLACE INTO station_reviews (station, url, avg_score, fetched_at) "
             "VALUES (?,?,NULL,CURRENT_TIMESTAMP)", (station, hit["url"]))
     return None
