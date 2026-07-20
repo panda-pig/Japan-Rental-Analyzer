@@ -74,12 +74,45 @@ def _normalize_romaji(s):
     return s
 
 
-def _romaji(name):
+# pykakasi の辞書で誤読する駅名の例外表 (確認済みの誤読のみ追加)
+READING_OVERRIDES = {
+    "阿佐ヶ谷": "asagaya",      # asaketani と誤読
+    "日ノ出町": "hinodecho",    # nichinodemachi と誤読
+    "三ツ境": "mitsukyo",       # santsusakai と誤読
+    "大井町": "oimachi",        # ooichou と誤読
+    "向河原": "mukaigawara",    # koukawara と誤読
+    "たまプラーザ": "tamaplaza",  # 公式ローマ字が plaza 表記
+}
+
+
+def _romaji_variants(name):
+    """漢字駅名のローマ字候補 (正規化済み) を返す。
+
+    辞書の素読みに加え、「ヶ/ケ→が」置換版も候補にする (保土ケ谷=ほどがや 等の
+    誤読対策)。どちらが正しいかは slug 照合で決まるため両方返す。
+    """
     global _kks
+    if name in READING_OVERRIDES:
+        return [_normalize_romaji(READING_OVERRIDES[name])]
     if _kks is None:
         import pykakasi
         _kks = pykakasi.kakasi()
-    return _normalize_romaji("".join(x["hepburn"] for x in _kks.convert(name)))
+    out = []
+    native = _normalize_romaji("".join(x["hepburn"] for x in _kks.convert(name)))
+    if native:
+        out.append(native)
+    alt_src = re.sub(r"ヶ", "が", name)
+    alt_src = re.sub(r"(?<=[一-鿿])ケ(?=[一-鿿])", "が", alt_src)
+    if alt_src != name:
+        alt = _normalize_romaji("".join(x["hepburn"] for x in _kks.convert(alt_src)))
+        if alt and alt not in out:
+            out.append(alt)
+    return out
+
+
+def _romaji(name):
+    v = _romaji_variants(name)
+    return v[0] if v else None
 
 
 def _fetch_retry(url, retries=2, backoff=6):
@@ -122,19 +155,25 @@ def ensure_station_map(build=False, debug=False):
 def _resolve_url(station_kanji):
     """漢字駅名 → まちむすび駅ページ URL (ローマ字化 + 正規化 + 近似照合)。"""
     global _slug_index
-    if _slug_index is None:
+    # マップが未完成のうちはキャッシュを信用せず毎回読み直す
+    # (Webプロセスが空マップを掴んだ後にバッチが構築するケースへの対策)
+    if _slug_index is None or len(_slug_index) < MIN_MAP_SIZE:
         _slug_index = {}
         for r in query_all("SELECT station, url FROM machimusubi_stations"):
             _slug_index.setdefault(_normalize_romaji(r["station"]), r["url"])
     if not _slug_index:
         return None
-    cand = _romaji(station_kanji)
-    if not cand:
-        return None
-    if cand in _slug_index:
-        return _slug_index[cand]
-    close = difflib.get_close_matches(cand, _slug_index.keys(), n=1, cutoff=0.86)
-    return _slug_index[close[0]] if close else None
+    cands = _romaji_variants(station_kanji)
+    for cand in cands:          # まず完全一致 (slug が正解の基準)
+        if cand in _slug_index:
+            return _slug_index[cand]
+    best = None
+    for cand in cands:          # 次に近似照合
+        for hit in difflib.get_close_matches(cand, _slug_index.keys(), n=1, cutoff=0.86):
+            ratio = difflib.SequenceMatcher(None, cand, hit).ratio()
+            if best is None or ratio > best[0]:
+                best = (ratio, hit)
+    return _slug_index[best[1]] if best else None
 
 
 def parse_station_scores(html):

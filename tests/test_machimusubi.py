@@ -4,7 +4,8 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scrapers.machimusubi import (parse_station_scores, normalize_station,
-                                  extract_station, _romaji, _normalize_romaji)
+                                  extract_station, _romaji, _romaji_variants,
+                                  _normalize_romaji)
 
 SYNTH = """
 <html><body>
@@ -71,3 +72,21 @@ def test_normalize_romaji_slug_side():
     # slug 側も同じ正規化を通すので表記ゆれが揃う
     assert _normalize_romaji("hatchobori") == "hatchobori"
     assert _normalize_romaji("shimbashi") == "shimbashi"
+
+
+def test_romaji_ke_ga_stations():
+    # ヶ/ケ 駅名: 素読みと「が」置換版の両候補を返し, slug 照合でどちらかが当たる
+    assert "hodogaya" in _romaji_variants("保土ケ谷")
+    assert "kibogaoka" in _romaji_variants("希望ヶ丘")
+    assert "tsurugamine" in _romaji_variants("鶴ヶ峰")
+    assert "ichigaya" in _romaji_variants("市ヶ谷")   # 辞書の素読みが正しいケース
+
+
+def test_romaji_reading_overrides():
+    # 確認済み誤読の例外表
+    assert _romaji("阿佐ヶ谷") == "asagaya"
+    assert _romaji("日ノ出町") == "hinodecho"
+    assert _romaji("三ツ境") == "mitsukyo"
+    assert _romaji("大井町") == "oimachi"
+    assert _romaji("向河原") == "mukaigawara"
+    assert _romaji("たまプラーザ") == "tamaplaza"
