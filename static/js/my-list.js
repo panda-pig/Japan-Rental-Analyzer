@@ -1,8 +1,8 @@
 // ===== 物件分析页：URL解析 + 单套报告 + 房源池(累积/点选/多选对比/收藏) =====
 
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const COLORS = { primary: '#2563EB', good: '#059669', warn: '#D97706', bad: '#DC2626', text: '#5A6B7E', muted: '#8B9AAA', border: '#E4E8EC',
-  palette: ['#2563EB', '#059669', '#D97706', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1', '#F43F5E'] };
+const COLORS = { primary: '#4356C2', good: '#0E9268', warn: '#C9740A', bad: '#CE3B3B', text: '#5A6478', muted: '#8B93A7', border: '#E5E8F0',
+  palette: ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0', '#D9679E', '#159E90', '#5F6BD3', '#DE5470'] };
 const BASE_OPT = {
   textStyle: { fontFamily: CHART_FONT, color: COLORS.text, fontSize: 12 },
   tooltip: { backgroundColor: '#FFFFFF', borderColor: COLORS.border, borderWidth: 1,
@@ -267,6 +267,8 @@ function drawRegionBar(elId, rows) {
 
 // ---------- 单套报告 ----------
 function scoreColor(s) { return s >= 75 ? COLORS.good : s >= 60 ? COLORS.primary : s >= 45 ? COLORS.warn : COLORS.bad; }
+// スコアバッジの色分け (高=green / 中=indigo / 低=amber)
+function badgeCls(s) { return 'badge score' + (s == null ? '' : s >= 75 ? '' : s >= 60 ? ' mid' : ' low'); }
 
 const AMENITIES = [
   ['bath_toilet_separate', 'バストイレ別'], ['auto_lock', 'オートロック'],
@@ -494,7 +496,7 @@ function drawReportCharts(l, region, prefs) {
         type: 'line', smooth: true, symbolSize: 7,
         data: hist.map(h => h.total_monthly_cost),
         itemStyle: { color: COLORS.primary }, lineStyle: { color: COLORS.primary, width: 2 },
-        areaStyle: { color: 'rgba(37,99,235,0.08)' },
+        areaStyle: { color: 'rgba(67,86,194,0.08)' },
         label: { show: true, formatter: p => (p.value / 10000).toFixed(1) + '万', fontSize: 10, color: COLORS.text },
       }],
     });
@@ -539,7 +541,7 @@ function poolHtml(pool, d) {
     const favMark = l.fav_status ? `<span class="tag good" title="${l.fav_status}">★</span>` : '';
     return `<tr data-id="${l.id}" class="pool-row"${sel}>
       <td><input type="checkbox" class="pool-check" data-id="${l.id}"></td>
-      <td><span class="badge score">${l.total_score ?? '-'}</span></td>
+      <td><span class="${badgeCls(l.total_score)}">${l.total_score ?? '-'}</span></td>
       <td style="font-weight:600;color:var(--text-primary);">${l.title || ''} ${favMark}</td>
       <td>${l.ward || '-'}</td>
       <td>${(l.total_monthly_cost || 0).toLocaleString()}円</td>

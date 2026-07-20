@@ -1,5 +1,5 @@
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const PALETTE = ['#2563EB', '#059669', '#D97706', '#8B5CF6'];
+const PALETTE = ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0'];
 const RADAR_DIMS = [
   { name: '予算', max: 20 }, { name: '面積', max: 15 }, { name: '通勤', max: 15 },
   { name: '階数', max: 10 }, { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
@@ -16,17 +16,17 @@ function drawCompareRadar(data) {
   if (radarChart) radarChart.dispose();
   radarChart = echarts.init(el);
   radarChart.setOption({
-    textStyle: { fontFamily: CHART_FONT, color: '#5A6B7E', fontSize: 12 },
+    textStyle: { fontFamily: CHART_FONT, color: '#5A6478', fontSize: 12 },
     tooltip: {
-      backgroundColor: '#FFFFFF', borderColor: '#E4E8EC', borderWidth: 1,
-      textStyle: { fontFamily: CHART_FONT, color: '#1A2332', fontSize: 12 },
-      extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;',
+      backgroundColor: '#FFFFFF', borderColor: '#E5E8F0', borderWidth: 1,
+      textStyle: { fontFamily: CHART_FONT, color: '#1B2337', fontSize: 12 },
+      extraCssText: 'box-shadow: 0 3px 10px rgba(35,45,95,0.10); border-radius: 8px;',
     },
-    legend: { bottom: 0, data: scored.map(l => l.title), textStyle: { color: '#5A6B7E', fontFamily: CHART_FONT, fontSize: 12 } },
+    legend: { bottom: 0, data: scored.map(l => l.title), textStyle: { color: '#5A6478', fontFamily: CHART_FONT, fontSize: 12 } },
     radar: {
       indicator: RADAR_DIMS, shape: 'polygon', radius: '68%', center: ['50%', '48%'],
-      axisName: { color: '#5A6B7E', fontFamily: CHART_FONT, fontSize: 12 },
-      splitArea: { areaStyle: { color: ['rgba(37,99,235,0.02)', 'rgba(37,99,235,0.05)'] } },
+      axisName: { color: '#5A6478', fontFamily: CHART_FONT, fontSize: 12 },
+      splitArea: { areaStyle: { color: ['rgba(67,86,194,0.02)', 'rgba(67,86,194,0.05)'] } },
     },
     series: [{
       type: 'radar',
@@ -69,7 +69,7 @@ async function load() {
       let v = l[key];
       if (["total_monthly_cost", "rent", "management_fee", "initial_cost_estimate", "deposit", "key_money"].includes(key))
         v = (v || 0).toLocaleString() + '円';
-      if (key === "total_score" && v != null) v = `<span class="badge score">${v}</span>`;
+      if (key === "total_score" && v != null) v = `<span class="badge score${v >= 75 ? '' : v >= 60 ? ' mid' : ' low'}">${v}</span>`;
       if (key === "pet_allowed") v = v ? '<span class="tag good">可</span>' : '<span class="tag muted">不可</span>';
       if (key === "commute_minutes" && !l.commute_resolved) v = '<span class="tag muted">未取得</span>';
       if (key === "platform" && v) v = `<span class="badge platform">${v}</span>`;

@@ -39,7 +39,7 @@ async function load() {
     <div class="card listing-card">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <h3 style="margin:0;">${s.title || "(名称不明)"}</h3>
-        ${s.total_score != null ? `<span class="badge score">${s.total_score}</span>` : ""}
+        ${s.total_score != null ? `<span class="badge score${s.total_score >= 75 ? '' : s.total_score >= 60 ? ' mid' : ' low'}">${s.total_score}</span>` : ""}
       </div>
       <p class="location">${s.ward || "エリア不明"} ・ ${(s.total_monthly_cost || 0).toLocaleString()}円${s.area_m2 ? ` ・ ${s.area_m2}㎡` : ""}${s.layout ? ` ・ ${s.layout}` : ""}</p>
       <div class="tags"><span class="tag ${cls}">${s.status || "未設定"}</span></div>

@@ -1,7 +1,7 @@
 const CHART = {
-  primary: '#2563EB', good: '#059669', warn: '#D97706', bad: '#DC2626',
-  text: '#5A6B7E', textMuted: '#8B9AAA', border: '#E4E8EC',
-  palette: ['#2563EB', '#059669', '#D97706', '#8B5CF6', '#EC4899', '#14B8A6'],
+  primary: '#4356C2', good: '#0E9268', warn: '#C9740A', bad: '#CE3B3B',
+  text: '#5A6478', textMuted: '#8B93A7', border: '#E5E8F0',
+  palette: ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0', '#D9679E', '#159E90'],
 };
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const BASE_OPTION = {
@@ -80,7 +80,7 @@ function radar(id, indicators, seriesData) {
     legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 11 } },
     radar: {
       indicator: indicators, shape: 'polygon', radius: '62%',
-      splitArea: { areaStyle: { color: ['rgba(37,99,235,0.02)', 'rgba(37,99,235,0.04)'] } },
+      splitArea: { areaStyle: { color: ['rgba(67,86,194,0.02)', 'rgba(67,86,194,0.04)'] } },
       axisName: { color: CHART.text, fontFamily: CHART_FONT, fontSize: 11 },
     },
     series: [{ type: 'radar', data: seriesData, symbol: 'circle', symbolSize: 6, areaStyle: { opacity: 0.08 }, lineStyle: { width: 2 } }],

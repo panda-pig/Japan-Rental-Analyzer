@@ -3,25 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Dashboard{% endblock %} - Rental Intelligence</title>
+<meta name="description" content="賃貸物件のURLを貼るだけで、スコアリング・エリア相場比較・公的データ・駅の住民評価まで1枚のレポートに。東京・横浜の物件探し意思決定ツール。">
+<title>{% block title %}Dashboard{% endblock %} - Japan Rental Analyzer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234356C2'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.3/src/wordcloud2.js"></script>
 </head>
 <body>
+{% set p = request.path %}
 <nav class="nav">
-  <div class="nav-brand">
+  <a class="nav-brand" href="/">
     <span class="nav-brand-icon">J</span>
-    <span>Japan Rental Analyzer</span>
-  </div>
-  <a class="nav-link" href="/">エリアデータ</a>
-  <a class="nav-link" href="/my-list">物件分析</a>
-  <a class="nav-link" href="/favorites">お気に入り</a>
-  <a class="nav-link" href="/compare">比較</a>
-  <a class="nav-link" href="/settings">設定</a>
+    <span class="nav-brand-name">Japan Rental Analyzer</span>
+  </a>
+  <a class="nav-link{% if p == '/' %} active{% endif %}" href="/">エリアデータ</a>
+  <a class="nav-link{% if p == '/my-list' %} active{% endif %}" href="/my-list">物件分析</a>
+  <a class="nav-link{% if p == '/favorites' %} active{% endif %}" href="/favorites">お気に入り</a>
+  <a class="nav-link{% if p == '/compare' %} active{% endif %}" href="/compare">比較</a>
+  <a class="nav-link{% if p == '/settings' %} active{% endif %}" href="/settings">設定</a>
 </nav>
 <div class="container">
 {% block content %}{% endblock %}
