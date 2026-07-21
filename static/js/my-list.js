@@ -269,6 +269,15 @@ function drawRegionBar(elId, rows) {
 function scoreColor(s) { return s >= 75 ? COLORS.good : s >= 60 ? COLORS.primary : s >= 45 ? COLORS.warn : COLORS.bad; }
 // スコアバッジの色分け (高=green / 中=indigo / 低=amber)
 function badgeCls(s) { return 'badge score' + (s == null ? '' : s >= 75 ? '' : s >= 60 ? ' mid' : ' low'); }
+// 掲載元ごとのバッジ色分け (athome を HOME より先に判定)
+function platformCls(p) {
+  const s = String(p || '').toUpperCase();
+  if (s.includes('ATHOME')) return 'p-athome';
+  if (s.includes('SUUMO')) return 'p-suumo';
+  if (s.includes('HOME')) return 'p-homes';
+  if (s.includes('YAHOO')) return 'p-yahoo';
+  return '';
+}
 
 const AMENITIES = [
   ['bath_toilet_separate', 'バストイレ別'], ['auto_lock', 'オートロック'],
@@ -302,7 +311,7 @@ function reportHtml(l, region) {
     </div>`;
 
   const amenityChips = AMENITIES.map(([k, label]) =>
-    l[k] ? `<span class="tag good">✓ ${label}</span>` : `<span class="tag muted">${label}</span>`).join('');
+    l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}</span>`).join('');
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
@@ -321,7 +330,7 @@ function reportHtml(l, region) {
     <div class="card" style="margin-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-          <h2 style="margin-bottom:4px;">${l.title || '物件レポート'} <span class="badge platform">${l.platform || '-'}</span></h2>
+          <h2 style="margin-bottom:4px;">${l.title || '物件レポート'} <span class="badge platform ${platformCls(l.platform)}">${l.platform || '-'}</span></h2>
           <p style="font-size:13px;color:var(--text-secondary);margin:0;">
             ${l.ward || '地域不明'}${l.region_avg_rent ? ` ・ エリア平均と比較` : ' ・ エリア基準データなし'}
           </p>
