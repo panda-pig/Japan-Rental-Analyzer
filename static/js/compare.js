@@ -1,5 +1,5 @@
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const PALETTE = ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0'];
+const PALETTE = ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0'];
 const RADAR_DIMS = [
   { name: '予算', max: 20 }, { name: '面積', max: 15 }, { name: '通勤', max: 15 },
   { name: '階数', max: 10 }, { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
@@ -16,17 +16,17 @@ function drawCompareRadar(data) {
   if (radarChart) radarChart.dispose();
   radarChart = echarts.init(el);
   radarChart.setOption({
-    textStyle: { fontFamily: CHART_FONT, color: '#5A6478', fontSize: 12 },
+    textStyle: { fontFamily: CHART_FONT, color: '#6E6C63', fontSize: 12 },
     tooltip: {
-      backgroundColor: '#FFFFFF', borderColor: '#E5E8F0', borderWidth: 1,
-      textStyle: { fontFamily: CHART_FONT, color: '#1B2337', fontSize: 12 },
+      backgroundColor: '#FFFFFF', borderColor: '#E7E4DB', borderWidth: 1,
+      textStyle: { fontFamily: CHART_FONT, color: '#2B2A26', fontSize: 12 },
       extraCssText: 'box-shadow: 0 3px 10px rgba(35,45,95,0.10); border-radius: 8px;',
     },
-    legend: { bottom: 0, data: scored.map(l => l.title), textStyle: { color: '#5A6478', fontFamily: CHART_FONT, fontSize: 12 } },
+    legend: { bottom: 0, data: scored.map(l => l.title), textStyle: { color: '#6E6C63', fontFamily: CHART_FONT, fontSize: 12 } },
     radar: {
       indicator: RADAR_DIMS, shape: 'polygon', radius: '68%', center: ['50%', '48%'],
-      axisName: { color: '#5A6478', fontFamily: CHART_FONT, fontSize: 12 },
-      splitArea: { areaStyle: { color: ['rgba(67,86,194,0.02)', 'rgba(67,86,194,0.05)'] } },
+      axisName: { color: '#6E6C63', fontFamily: CHART_FONT, fontSize: 12 },
+      splitArea: { areaStyle: { color: ['rgba(86,105,110,0.02)', 'rgba(86,105,110,0.05)'] } },
     },
     series: [{
       type: 'radar',

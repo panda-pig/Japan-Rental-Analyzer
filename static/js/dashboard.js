@@ -1,14 +1,14 @@
 const CHART = {
-  primary: '#4356C2', good: '#0E9268', warn: '#C9740A', bad: '#CE3B3B',
-  text: '#5A6478', textMuted: '#8B93A7', border: '#E5E8F0',
-  palette: ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0', '#D9679E', '#159E90'],
+  primary: '#56696E', good: '#5C7A5B', warn: '#A97A2E', bad: '#A85450',
+  text: '#6E6C63', textMuted: '#A6A398', border: '#E7E4DB',
+  palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82'],
 };
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const BASE_OPTION = {
   textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 12 },
   tooltip: {
     backgroundColor: '#FFFFFF', borderColor: CHART.border, borderWidth: 1,
-    textStyle: { fontFamily: CHART_FONT, color: '#1A2332', fontSize: 12 },
+    textStyle: { fontFamily: CHART_FONT, color: '#2B2A26', fontSize: 12 },
     extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;',
   },
   grid: { top: 30, right: 20, bottom: 30, left: 50, containLabel: true },
@@ -80,7 +80,7 @@ function radar(id, indicators, seriesData) {
     legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 11 } },
     radar: {
       indicator: indicators, shape: 'polygon', radius: '62%',
-      splitArea: { areaStyle: { color: ['rgba(67,86,194,0.02)', 'rgba(67,86,194,0.04)'] } },
+      splitArea: { areaStyle: { color: ['rgba(86,105,110,0.02)', 'rgba(86,105,110,0.04)'] } },
       axisName: { color: CHART.text, fontFamily: CHART_FONT, fontSize: 11 },
     },
     series: [{ type: 'radar', data: seriesData, symbol: 'circle', symbolSize: 6, areaStyle: { opacity: 0.08 }, lineStyle: { width: 2 } }],

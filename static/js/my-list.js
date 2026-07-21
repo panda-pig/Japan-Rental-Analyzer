@@ -1,12 +1,12 @@
 // ===== 物件分析页：URL解析 + 单套报告 + 房源池(累积/点选/多选对比/收藏) =====
 
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const COLORS = { primary: '#4356C2', good: '#0E9268', warn: '#C9740A', bad: '#CE3B3B', text: '#5A6478', muted: '#8B93A7', border: '#E5E8F0',
-  palette: ['#4356C2', '#0E9268', '#C9740A', '#7C6FD0', '#D9679E', '#159E90', '#5F6BD3', '#DE5470'] };
+const COLORS = { primary: '#56696E', good: '#5C7A5B', warn: '#A97A2E', bad: '#A85450', text: '#6E6C63', muted: '#A6A398', border: '#E7E4DB',
+  palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82', '#6E7A82', '#B08A6E'] };
 const BASE_OPT = {
   textStyle: { fontFamily: CHART_FONT, color: COLORS.text, fontSize: 12 },
   tooltip: { backgroundColor: '#FFFFFF', borderColor: COLORS.border, borderWidth: 1,
-    textStyle: { fontFamily: CHART_FONT, color: '#1A2332', fontSize: 12 },
+    textStyle: { fontFamily: CHART_FONT, color: '#2B2A26', fontSize: 12 },
     extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;' },
 };
 
@@ -496,7 +496,7 @@ function drawReportCharts(l, region, prefs) {
         type: 'line', smooth: true, symbolSize: 7,
         data: hist.map(h => h.total_monthly_cost),
         itemStyle: { color: COLORS.primary }, lineStyle: { color: COLORS.primary, width: 2 },
-        areaStyle: { color: 'rgba(67,86,194,0.08)' },
+        areaStyle: { color: 'rgba(86,105,110,0.08)' },
         label: { show: true, formatter: p => (p.value / 10000).toFixed(1) + '万', fontSize: 10, color: COLORS.text },
       }],
     });
