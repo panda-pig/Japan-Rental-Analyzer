@@ -325,6 +325,20 @@ body {
   vertical-align: middle;
 }
 
+/* エリア平均比の偏差 — pill バッジ */
+.dev-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 9px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+.dev-badge.cheap  { background: var(--good-bg); color: var(--good); border-color: var(--good-border); }
+.dev-badge.pricey { background: var(--bad-bg);  color: var(--bad);  border-color: var(--bad-border); }
+
 /* ===== 平台来源 badge — accent by source (washoku-tinted) ===== */
 .badge.platform.p-suumo  { background: var(--good-bg);   color: var(--good);        border-color: var(--good-border); }
 .badge.platform.p-homes  { background: var(--warn-bg);   color: var(--warn);        border-color: var(--warn-border); }

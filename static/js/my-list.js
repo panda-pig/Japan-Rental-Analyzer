@@ -297,7 +297,7 @@ function reportHtml(l, region) {
     const diff = l.total_monthly_cost - l.region_avg_rent;
     rentCls = dev < 0 ? 'good' : '';
     const col = diff > 0 ? 'var(--bad)' : 'var(--good)';
-    rentLabel = `<div class="label" style="color:${col};font-weight:600;">エリア平均比 ${diff > 0 ? '+' : ''}${Math.round(dev * 100)}% (${diff > 0 ? '+' : ''}${(diff / 10000).toFixed(1)}万)</div>`;
+    rentLabel = `<div class="label">エリア平均比 <span class="dev-badge ${diff > 0 ? 'pricey' : 'cheap'}">${diff > 0 ? '+' : ''}${Math.round(dev * 100)}%</span> <span style="color:${col};">${diff > 0 ? '+' : ''}${(diff / 10000).toFixed(1)}万</span></div>`;
   }
   const areaLabel = l.region_avg_area ? `エリア平均 ${l.region_avg_area}㎡` : '専有面積';
 
@@ -312,6 +312,21 @@ function reportHtml(l, region) {
 
   const amenityChips = AMENITIES.map(([k, label]) =>
     l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}</span>`).join('');
+
+  // 条件クリア(達成した希望条件)— 前端で listing + prefs から判定
+  const P = (state.data && state.data.prefs) || {};
+  const achievements = [];
+  if (l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000)) achievements.push('予算内');
+  if (l.total_monthly_cost && l.region_avg_rent && l.total_monthly_cost < l.region_avg_rent) achievements.push('コスパ良');
+  if (l.area_m2 && l.area_m2 >= (P.ideal_area_m2 || 40)) achievements.push('広め');
+  if (l.building_age != null && l.building_age <= 10) achievements.push('築浅');
+  if (l.walk_minutes != null && l.walk_minutes <= 10) achievements.push('駅徒歩10分以内');
+  if (l.floor != null && l.floor >= 3) achievements.push('3階以上');
+  if (l.key_money === 0) achievements.push('礼金なし');
+  if (l.deposit === 0) achievements.push('敷金なし');
+  const achievementChips = achievements.length
+    ? achievements.map(t => `<span class="chip on">✓ ${t}</span>`).join('')
+    : '<span class="chip off">該当なし</span>';
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
@@ -343,6 +358,10 @@ function reportHtml(l, region) {
         </div>
       </div>
       ${metrics}
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">条件クリア</div>
+        ${achievementChips}
+      </div>
       <div style="margin-top:16px;">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">設備・特徴</div>
         ${amenityChips}
@@ -545,7 +564,7 @@ function poolHtml(pool, d) {
   const rows = pool.map(l => {
     const dev = deviationOf(l);
     const devHtml = dev == null ? '-' :
-      `<span style="color:${dev > 0 ? 'var(--bad)' : 'var(--good)'};font-weight:600;">${dev > 0 ? '+' : ''}${Math.round(dev * 100)}%</span>`;
+      `<span class="dev-badge ${dev > 0 ? 'pricey' : 'cheap'}">${dev > 0 ? '+' : ''}${Math.round(dev * 100)}%</span>`;
     const sel = l.id === state.selectedId ? ' style="background:var(--accent-bg,#EFF4FF);"' : '';
     const favMark = l.fav_status ? `<span class="fav-star" title="${l.fav_status}">★</span>` : '';
     return `<tr data-id="${l.id}" class="pool-row"${sel}>
