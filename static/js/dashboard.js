@@ -133,7 +133,7 @@ function renderTable() {
     <td>${scoreBar(r.safety_score)}</td>
     <td>${scoreBar(r.convenience_score)}</td>
     <td>${scoreBar(r.environment_score)}</td>
-    <td>${r.hazard_level ? `<span class="tag ${r.hazard_level === '高' ? 'bad' : r.hazard_level === '中' ? 'warn' : 'good'}" title="洪水・土砂 (出典: 不動産情報ライブラリ, 区役所周辺の参考値)">${r.hazard_level}</span>` : '-'}</td>
+    <td>${r.hazard_level ? `<span class="tag ${r.hazard_level === '高' ? 'hazard-high' : r.hazard_level === '中' ? 'warn' : 'good'}" title="洪水・土砂 (出典: 不動産情報ライブラリ, 区役所周辺の参考値)">${r.hazard_level}</span>` : '-'}</td>
   </tr>`).join('');
 }
 

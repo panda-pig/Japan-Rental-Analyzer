@@ -547,7 +547,7 @@ function poolHtml(pool, d) {
     const devHtml = dev == null ? '-' :
       `<span style="color:${dev > 0 ? 'var(--bad)' : 'var(--good)'};font-weight:600;">${dev > 0 ? '+' : ''}${Math.round(dev * 100)}%</span>`;
     const sel = l.id === state.selectedId ? ' style="background:var(--accent-bg,#EFF4FF);"' : '';
-    const favMark = l.fav_status ? `<span class="tag good" title="${l.fav_status}">★</span>` : '';
+    const favMark = l.fav_status ? `<span class="fav-star" title="${l.fav_status}">★</span>` : '';
     return `<tr data-id="${l.id}" class="pool-row"${sel}>
       <td><input type="checkbox" class="pool-check" data-id="${l.id}"></td>
       <td><span class="${badgeCls(l.total_score)}">${l.total_score ?? '-'}</span></td>

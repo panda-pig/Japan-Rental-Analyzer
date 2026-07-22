@@ -295,16 +295,34 @@ body {
   transition: all var(--transition);
 }
 .chip.on {
-  background: var(--good-bg);
-  color: var(--good);
-  border-color: var(--good-border);
+  background: #E4EEDE;          /* 苔緑 — 少し実め */
+  color: #46603F;
+  border-color: #BED2B3;
   font-weight: 600;
 }
 .chip.off {
   background: transparent;
   color: var(--text-muted);
   border-color: var(--border);
+  border-style: dashed;
   font-weight: 400;
+}
+
+/* 災害「高」— 実心の赤で警告 */
+.tag.hazard-high {
+  background: var(--bad);
+  color: #fff;
+  border: 1px solid var(--bad);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* お気に入り★ — 山吹で目立たせる */
+.fav-star {
+  color: var(--warn);
+  font-size: 12.5px;
+  margin-left: 5px;
+  vertical-align: middle;
 }
 
 /* ===== 平台来源 badge — accent by source (washoku-tinted) ===== */
