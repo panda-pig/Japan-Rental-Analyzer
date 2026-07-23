@@ -313,20 +313,21 @@ function reportHtml(l, region) {
   const amenityChips = AMENITIES.map(([k, label]) =>
     l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}</span>`).join('');
 
-  // 条件クリア(達成した希望条件)— 前端で listing + prefs から判定
+  // 条件クリア(希望条件の達成状況)— 前端で listing + prefs から判定, 全項目を対照表示
   const P = (state.data && state.data.prefs) || {};
-  const achievements = [];
-  if (l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000)) achievements.push('予算内');
-  if (l.total_monthly_cost && l.region_avg_rent && l.total_monthly_cost < l.region_avg_rent) achievements.push('コスパ良');
-  if (l.area_m2 && l.area_m2 >= (P.ideal_area_m2 || 40)) achievements.push('広め');
-  if (l.building_age != null && l.building_age <= 10) achievements.push('築浅');
-  if (l.walk_minutes != null && l.walk_minutes <= 10) achievements.push('駅徒歩10分以内');
-  if (l.floor != null && l.floor >= 3) achievements.push('3階以上');
-  if (l.key_money === 0) achievements.push('礼金なし');
-  if (l.deposit === 0) achievements.push('敷金なし');
-  const achievementChips = achievements.length
-    ? achievements.map(t => `<span class="chip on">✓ ${t}</span>`).join('')
-    : '<span class="chip off">該当なし</span>';
+  const ACHV = [
+    ['予算内', !!(l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000))],
+    ['コスパ良', !!(l.total_monthly_cost && l.region_avg_rent && l.total_monthly_cost < l.region_avg_rent)],
+    ['広め', !!(l.area_m2 && l.area_m2 >= (P.ideal_area_m2 || 40))],
+    ['築浅', l.building_age != null && l.building_age <= 10],
+    ['駅徒歩10分以内', l.walk_minutes != null && l.walk_minutes <= 10],
+    ['3階以上', l.floor != null && l.floor >= 3],
+    ['礼金なし', l.key_money === 0],
+    ['敷金なし', l.deposit === 0],
+  ];
+  const achvOk = ACHV.filter(a => a[1]).length;
+  const achievementChips = ACHV.map(([t, ok]) =>
+    ok ? `<span class="chip on">✓ ${t}</span>` : `<span class="chip off">${t}</span>`).join('');
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
@@ -359,7 +360,7 @@ function reportHtml(l, region) {
       </div>
       ${metrics}
       <div style="margin-top:16px;">
-        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">条件クリア</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">条件クリア <span style="color:var(--good);">${achvOk}</span><span style="font-weight:400;">/${ACHV.length}</span></div>
         ${achievementChips}
       </div>
       <div style="margin-top:16px;">
