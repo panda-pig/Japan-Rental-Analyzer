@@ -180,7 +180,7 @@ function drawWordCloud(cloud) {
   if (typeof WordCloud === 'function') {
     el.innerHTML = '';
     const side = Math.min(el.clientWidth || 520, 560);
-    const h = Math.round(side * 0.82);
+    const h = Math.round(side * 0.92);
     const canvas = document.createElement('canvas');
     canvas.width = side; canvas.height = h;
     canvas.style.width = side + 'px'; canvas.style.height = h + 'px';
@@ -188,16 +188,40 @@ function drawWordCloud(cloud) {
     el.style.height = 'auto';
     el.appendChild(canvas);
     let i = 0;
+    // 家の輪郭 (words も同じスケールに拘束するため先に計算)
+    const G = 3;
+    const cx = side / 2, cy = h / 2;
+    const R_out = Math.min(cy * 0.95 / 0.80, cx * 0.95 / 0.72);
+    // wordcloud2 内部の maxRadius は対角線/2 (grid単位)。shape の戻り値を
+    // 輪郭半径に合わせて縮めることで、語の配置を家の中に閉じ込める
+    const maxR_wc = Math.floor(Math.sqrt(Math.floor(side / G) ** 2 + Math.floor(h / G) ** 2) / 2);
+    const K = (R_out / G) / maxR_wc;
+
+    // 描画完了後に家の輪郭線を重ねる (語数が少なくても 🏠 が読めるように)
+    canvas.addEventListener('wordcloudstop', () => {
+      const ctx = canvas.getContext('2d');
+      ctx.beginPath();
+      HOUSE_POLY.forEach(([x, y], idx) => {
+        const px = cx + x * R_out, py = cy + y * R_out;
+        idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#CFC9B8';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }, { once: true });
     WordCloud(canvas, {
       list: cloud.map(c => [c.name, c.value]),
-      gridSize: 4,
-      weightFactor: v => max === min ? 34 : 14 + (v - min) / (max - min) * 46, // 14~60px
+      gridSize: G,
+      weightFactor: v => max === min ? 30 : 13 + (v - min) / (max - min) * 33, // 13~46px
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
       color: () => COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0.25, rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: 0,
-      shape: houseShape, ellipticity: 1, drawOutOfBound: false, shrinkToFit: true,
+      rotateRatio: 0,  /* 全て横書き: 家のシルエットを崩さない */
+      shape: theta => houseShape(theta) * K,
+      ellipticity: 1, drawOutOfBound: false, shrinkToFit: true,
     });
     return;
   }
