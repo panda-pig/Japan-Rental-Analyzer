@@ -188,40 +188,61 @@ function drawWordCloud(cloud) {
     el.style.height = 'auto';
     el.appendChild(canvas);
     let i = 0;
-    // 家の輪郭 (words も同じスケールに拘束するため先に計算)
-    const G = 3;
+    const G = 2;
     const cx = side / 2, cy = h / 2;
     const R_out = Math.min(cy * 0.95 / 0.80, cx * 0.95 / 0.72);
-    // wordcloud2 内部の maxRadius は対角線/2 (grid単位)。shape の戻り値を
-    // 輪郭半径に合わせて縮めることで、語の配置を家の中に閉じ込める
-    const maxR_wc = Math.floor(Math.sqrt(Math.floor(side / G) ** 2 + Math.floor(h / G) ** 2) / 2);
-    const K = (R_out / G) / maxR_wc;
 
-    // 描画完了後に家の輪郭線を重ねる (語数が少なくても 🏠 が読めるように)
+    // ハードマスク方式 (WordArt流): 家の外側を占有ピクセルで塗り潰しておくと
+    // wordcloud2 (clearCanvas:false) は内側にしか語を置けない → 縁の語が
+    // マスクに突き当たり、シルエットがくっきり 🏠 になる。描画後にマスク
+    // ピクセルだけ透明に消すので枠線は残らない。
+    const MASK = [171, 205, 239];  // パレットに無いユニーク色
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = `rgb(${MASK.join(',')})`;
+    ctx.fillRect(0, 0, side, h);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    HOUSE_POLY.forEach(([x, y], idx) => {
+      const px = cx + x * R_out, py = cy + y * R_out;
+      idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
     canvas.addEventListener('wordcloudstop', () => {
-      const ctx = canvas.getContext('2d');
-      ctx.beginPath();
-      HOUSE_POLY.forEach(([x, y], idx) => {
-        const px = cx + x * R_out, py = cy + y * R_out;
-        idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-      });
-      ctx.closePath();
-      ctx.strokeStyle = '#CFC9B8';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      const img = ctx.getImageData(0, 0, side, h);
+      const d = img.data;
+      // アンチエイリアスで色がわずかにずれるため許容誤差つきで消す
+      for (let p = 0; p < d.length; p += 4) {
+        if (Math.abs(d[p] - MASK[0]) <= 30 && Math.abs(d[p + 1] - MASK[1]) <= 30 &&
+            Math.abs(d[p + 2] - MASK[2]) <= 30) d[p + 3] = 0;
+      }
+      ctx.putImageData(img, 0, 0);
     }, { once: true });
+
+    // 語リスト: 主要語(大) + 繰り返しの充填語(小・くすみ色) で家を満たす
+    const mainW = v => max === min ? 30 : 16 + (v - min) / (max - min) * 28; // 16~44px
+    const list = cloud.map(c => [c.name, mainW(c.value)]);
+    const FILLER_SIZE = 12;
+    for (let rep = 0; rep < 6; rep++) {
+      cloud.forEach(c => list.push([c.name, FILLER_SIZE - (rep % 2) * 2])); // 12/10px 交互
+    }
+    list.sort((a, b) => b[1] - a[1]);  // 大きい語から配置
+
     WordCloud(canvas, {
-      list: cloud.map(c => [c.name, c.value]),
+      list,
+      clearCanvas: false,   // マスクを活かす
       gridSize: G,
-      weightFactor: v => max === min ? 30 : 13 + (v - min) / (max - min) * 33, // 13~46px
+      weightFactor: w => w, // list の重みを px としてそのまま使う
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
-      color: () => COLORS.palette[(i++) % COLORS.palette.length],
+      color: (word, weight) => weight <= FILLER_SIZE
+        ? 'rgba(166, 163, 152, 0.6)'    /* 充填語はくすみ色 */
+        : COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0,  /* 全て横書き: 家のシルエットを崩さない */
-      shape: theta => houseShape(theta) * K,
-      ellipticity: 1, drawOutOfBound: false, shrinkToFit: true,
+      rotateRatio: 0,       /* 全て横書き: 家のシルエットを崩さない */
+      ellipticity: 1, drawOutOfBound: false, shrinkToFit: false,
     });
     return;
   }
