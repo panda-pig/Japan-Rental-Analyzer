@@ -143,31 +143,24 @@ function wordCloudHtml(d) {
   </div>`;
 }
 
-// 房子轮廓的极坐标半径函数(供 wordcloud2 的 shape 使用)
-// 多边形以中心为原点(x右、y下),屋顶朝上(负 y);对每个角度射线求与多边形的最远交点
-const HOUSE_POLY = [
-  [0.60, 0.58],   // 右下角
-  [0.60, -0.18],  // 右墙顶
-  [0.72, -0.18],  // 右屋檐
-  [0.00, -0.80],  // 屋顶尖(上)
-  [-0.72, -0.18], // 左屋檐
-  [-0.60, -0.18], // 左墙顶
-  [-0.60, 0.58],  // 左下角
+// 云朵(☁️)轮廓: 由若干重叠圆(泡)构成的并集。canvas 上以中心为原点、
+// 単位半径(-1..1)で泡を配置し、内外判定に使う。
+const CLOUD_PUFFS = [
+  { x: -0.52, y: 0.12, r: 0.42 },
+  { x: -0.20, y: -0.28, r: 0.50 },
+  { x: 0.20, y: -0.30, r: 0.46 },
+  { x: 0.54, y: 0.06, r: 0.40 },
+  { x: 0.00, y: 0.20, r: 0.56 },
+  { x: -0.30, y: 0.30, r: 0.40 },
+  { x: 0.32, y: 0.30, r: 0.40 },
 ];
-const HOUSE_MAXR = 0.83; // 归一化基准(最远顶点距离)
-function houseShape(theta) {
-  const dx = Math.cos(theta), dy = Math.sin(theta);
-  let best = 0;
-  for (let i = 0; i < HOUSE_POLY.length; i++) {
-    const a = HOUSE_POLY[i], b = HOUSE_POLY[(i + 1) % HOUSE_POLY.length];
-    const ex = b[0] - a[0], ey = b[1] - a[1];
-    const det = -dx * ey + ex * dy;
-    if (Math.abs(det) < 1e-9) continue;
-    const t = (-a[0] * ey + ex * a[1]) / det;   // 射线距离
-    const s = (dx * a[1] - dy * a[0]) / det;    // 线段参数
-    if (t > 0 && s >= 0 && s <= 1 && t > best) best = t;
+// 底面をフラットに(雲の底は平ら): y > 0.46 は外側扱い
+function cloudInside(px, py) {
+  if (py > 0.46) return false;
+  for (const p of CLOUD_PUFFS) {
+    if ((px - p.x) ** 2 + (py - p.y) ** 2 <= p.r * p.r) return true;
   }
-  return Math.min(best / HOUSE_MAXR, 1);
+  return false;
 }
 
 function drawWordCloud(cloud) {
@@ -192,28 +185,28 @@ function drawWordCloud(cloud) {
     const cx = side / 2, cy = h / 2;
     const R_out = Math.min(cy * 0.95 / 0.80, cx * 0.95 / 0.72);
 
-    // ハードマスク方式 (WordArt流): 家の外側を占有ピクセルで塗り潰しておくと
-    // wordcloud2 (clearCanvas:false) は内側にしか語を置けない → 縁の語が
-    // マスクに突き当たり、シルエットがくっきり 🏠 になる。描画後にマスク
-    // ピクセルだけ透明に消すので枠線は残らない。
-    const MASK = [171, 205, 239];  // パレットに無いユニーク色
+    // ハードマスク方式: 雲の外側を占有ピクセルで塗り潰す → wordcloud2
+    // (clearCanvas:false) は雲の内側にしか語を置けず ☁️ シルエットになる。
+    // 描画後にマスク色だけ透明化するので枠線は残らない。
+    const MASK = [171, 205, 239];
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = `rgb(${MASK.join(',')})`;
     ctx.fillRect(0, 0, side, h);
+    // 雲(泡の並集)を destination-out で切り抜く
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    HOUSE_POLY.forEach(([x, y], idx) => {
-      const px = cx + x * R_out, py = cy + y * R_out;
-      idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-    });
-    ctx.closePath();
-    ctx.fill();
+    for (const p of CLOUD_PUFFS) {
+      ctx.beginPath();
+      ctx.arc(cx + p.x * R_out, cy + p.y * R_out, p.r * R_out, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 底のはみ出しを再マスク(平らな底)
     ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgb(${MASK.join(',')})`;
+    ctx.fillRect(0, cy + 0.46 * R_out, side, h);
 
     canvas.addEventListener('wordcloudstop', () => {
       const img = ctx.getImageData(0, 0, side, h);
       const d = img.data;
-      // アンチエイリアスで色がわずかにずれるため許容誤差つきで消す
       for (let p = 0; p < d.length; p += 4) {
         if (Math.abs(d[p] - MASK[0]) <= 30 && Math.abs(d[p + 1] - MASK[1]) <= 30 &&
             Math.abs(d[p + 2] - MASK[2]) <= 30) d[p + 3] = 0;
@@ -221,27 +214,21 @@ function drawWordCloud(cloud) {
       ctx.putImageData(img, 0, 0);
     }, { once: true });
 
-    // 語リスト: 主要語(大) + 繰り返しの充填語(小・くすみ色) で家を満たす
-    const mainW = v => max === min ? 30 : 16 + (v - min) / (max - min) * 28; // 16~44px
+    // 語は頻度どおりの大きさで、詰め込みすぎない(ふんわり)
+    const mainW = v => max === min ? 26 : 16 + (v - min) / (max - min) * 26; // 16~42px
     const list = cloud.map(c => [c.name, mainW(c.value)]);
-    const FILLER_SIZE = 12;
-    for (let rep = 0; rep < 6; rep++) {
-      cloud.forEach(c => list.push([c.name, FILLER_SIZE - (rep % 2) * 2])); // 12/10px 交互
-    }
     list.sort((a, b) => b[1] - a[1]);  // 大きい語から配置
 
     WordCloud(canvas, {
       list,
       clearCanvas: false,   // マスクを活かす
-      gridSize: G,
-      weightFactor: w => w, // list の重みを px としてそのまま使う
+      gridSize: 8,          // 大きめグリッド = 語間にゆとり(詰め込まない)
+      weightFactor: w => w,
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
-      color: (word, weight) => weight <= FILLER_SIZE
-        ? 'rgba(166, 163, 152, 0.6)'    /* 充填語はくすみ色 */
-        : COLORS.palette[(i++) % COLORS.palette.length],
+      color: () => COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0,       /* 全て横書き: 家のシルエットを崩さない */
+      rotateRatio: 0,
       ellipticity: 1, drawOutOfBound: false, shrinkToFit: false,
     });
     return;
