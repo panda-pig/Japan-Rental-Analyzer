@@ -1,47 +1,64 @@
 {% extends "base.html" %}
 {% block title %}エリアデータ{% endblock %}
 {% block content %}
-<h1 class="page-title">エリアデータ</h1>
-<p class="page-subtitle">東京・横浜・川崎エリアの相場と住みやすさ。狙い目エリアを見つけたら、気になる物件を「物件分析」でURL貼り付け。</p>
-
-<div class="metric-grid" id="metrics"></div>
-
-<div class="card">
-  <h2>狙い目エリアマップ <span class="sub">相場 × 総合評価 — 左上ほど「安くて評価が高い」</span></h2>
-  <div id="chart-value-map" class="chart" style="height:440px;"></div>
-</div>
-
-<div class="grid-2">
-  <div class="card"><h2>東京23区 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-tokyo-rent" class="chart"></div></div>
-  <div class="card"><h2>横浜市 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-yokohama-rent" class="chart"></div></div>
-</div>
-
-<div class="card">
-  <h2>エリア比較レーダー <span class="sub">安全性・便利度・環境・相場</span></h2>
-  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-    <select id="region-selector-1" onchange="renderRegionRadar()"></select>
-    <select id="region-selector-2" onchange="renderRegionRadar()"></select>
+<section class="hero">
+  <p class="hero-eyebrow">東京・横浜・川崎 賃貸物件アナライザー</p>
+  <h1 class="hero-title">気になる物件のURLを貼るだけ。<br>相場・災害・口コミまで、1枚のレポートに。</h1>
+  <p class="hero-lead">SUUMO / LIFULL HOME'S / athome / Yahoo!不動産 の物件ページを貼り付けると、あなたの条件で8次元スコアリング。エリア相場との差、公的な取引価格、災害リスク、最寄駅の住民評価までまとめて確認できます。</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary btn-lg" href="/my-list">物件を分析する →</a>
+    <a class="btn btn-ghost btn-lg" href="#area">エリアの相場を見る</a>
   </div>
-  <div id="chart-region-radar" class="chart"></div>
-</div>
+  <ol class="hero-steps">
+    <li><span class="step-n">1</span><span>物件ページのURLを貼り付け</span></li>
+    <li><span class="step-n">2</span><span>スコア・相場・災害・口コミを自動分析</span></li>
+    <li><span class="step-n">3</span><span>物件プールで比較・お気に入り管理</span></li>
+  </ol>
+</section>
 
-<div class="card" style="padding:0;overflow:hidden;">
-  <h2 style="padding:24px 24px 4px;">全エリア一覧 <span class="sub">見出しクリックで並び替え</span></h2>
-  <div style="overflow-x:auto;">
-    <table id="region-table">
-      <thead><tr>
-        <th data-sort="name">エリア</th>
-        <th data-sort="avg_rent">相場</th>
-        <th data-sort="trade_price_per_m2">取引㎡単価<span style="font-weight:400;">(売買)</span></th>
-        <th data-sort="overall_score">総合</th>
-        <th data-sort="safety_score">安全</th>
-        <th data-sort="convenience_score">便利</th>
-        <th data-sort="environment_score">環境</th>
-        <th data-sort="hazard_level">災害</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
+<section id="area">
+  <h2 class="section-title">エリアデータ</h2>
+  <p class="page-subtitle">まず相場と住みやすさで「狙い目エリア」を絞り込み。気になる物件を見つけたら「物件分析」でURLを貼り付け。</p>
+
+  <div class="metric-grid" id="metrics"></div>
+
+  <div class="card">
+    <h2>狙い目エリアマップ <span class="sub">相場 × 総合評価 — 左上ほど「安くて評価が高い」</span></h2>
+    <div id="chart-value-map" class="chart" style="height:440px;"></div>
   </div>
-</div>
+
+  <div class="grid-2">
+    <div class="card"><h2>東京23区 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-tokyo-rent" class="chart"></div></div>
+    <div class="card"><h2>横浜市 相場ランキング <span class="sub">1LDK / 色=総合評価</span></h2><div id="chart-yokohama-rent" class="chart"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>エリア比較レーダー <span class="sub">安全性・便利度・環境・相場</span></h2>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="region-selector-1" onchange="renderRegionRadar()"></select>
+      <select id="region-selector-2" onchange="renderRegionRadar()"></select>
+    </div>
+    <div id="chart-region-radar" class="chart"></div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <h2 style="padding:24px 24px 4px;">全エリア一覧 <span class="sub">見出しクリックで並び替え</span></h2>
+    <div style="overflow-x:auto;">
+      <table id="region-table">
+        <thead><tr>
+          <th data-sort="name">エリア</th>
+          <th data-sort="avg_rent">相場</th>
+          <th data-sort="trade_price_per_m2">取引㎡単価<span style="font-weight:400;">(売買)</span></th>
+          <th data-sort="overall_score">総合</th>
+          <th data-sort="safety_score">安全</th>
+          <th data-sort="convenience_score">便利</th>
+          <th data-sort="environment_score">環境</th>
+          <th data-sort="hazard_level">災害</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endblock %}
 {% block js %}dashboard.js{% endblock %}
