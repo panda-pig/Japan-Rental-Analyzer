@@ -143,93 +143,53 @@ function wordCloudHtml(d) {
   </div>`;
 }
 
-// 云朵(☁️)轮廓: 由若干重叠圆(泡)构成的并集。canvas 上以中心为原点、
-// 単位半径(-1..1)で泡を配置し、内外判定に使う。
-const CLOUD_PUFFS = [
-  { x: -0.52, y: 0.12, r: 0.42 },
-  { x: -0.20, y: -0.28, r: 0.50 },
-  { x: 0.20, y: -0.30, r: 0.46 },
-  { x: 0.54, y: 0.06, r: 0.40 },
-  { x: 0.00, y: 0.20, r: 0.56 },
-  { x: -0.30, y: 0.30, r: 0.40 },
-  { x: 0.32, y: 0.30, r: 0.40 },
-];
-// 底面をフラットに(雲の底は平ら): y > 0.46 は外側扱い
-function cloudInside(px, py) {
-  if (py > 0.46) return false;
-  for (const p of CLOUD_PUFFS) {
-    if ((px - p.x) ** 2 + (py - p.y) ** 2 <= p.r * p.r) return true;
-  }
-  return false;
-}
-
 function drawWordCloud(cloud) {
   const el = document.getElementById('chart-wordcloud');
   if (!el || !cloud || !cloud.length) return;
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
 
-  // 优先用 wordcloud2.js 打包算法(聚合成"房子"形状),失败则降级 HTML 标签云
+  // 王道のワードクラウド: 強い字数コントラスト + 密な噛み合わせ + 一部縦組み
   if (typeof WordCloud === 'function') {
     el.innerHTML = '';
-    const side = Math.min(el.clientWidth || 520, 560);
-    const h = Math.round(side * 0.92);
+    const W = Math.max(el.clientWidth || 640, 320);
+    const H = Math.round(W * 0.56);            // 横長 (王道の比率)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
-    canvas.width = side; canvas.height = h;
-    canvas.style.width = side + 'px'; canvas.style.height = h + 'px';
+    canvas.width = W * dpr; canvas.height = H * dpr;   // 高解像度で描画
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     canvas.style.display = 'block'; canvas.style.margin = '0 auto';
     el.style.height = 'auto';
     el.appendChild(canvas);
+
+    // 順位ベースの字数割当: 件数が横並びでも必ず階層が出る (最重要語ほど大きく)
+    const sorted = [...cloud].sort((a, b) => b.value - a.value);
+    const n = sorted.length;
+    // 語数が少ないほど1語を大きく。キャンバス幅にも追随
+    const base = Math.min(W, 900);
+    const MAXF = Math.max(24, Math.min(base / 13, base / Math.sqrt(n) * 0.42));
+    const MINF = Math.max(11, MAXF * 0.30);
+    const list = sorted.map((c, idx) => {
+      const rank = n === 1 ? 1 : 1 - idx / (n - 1);      // 1 → 0
+      const freq = max === min ? 1 : (c.value - min) / (max - min);
+      const t = 0.72 * rank + 0.28 * freq;               // 順位主体・件数で微調整
+      return [c.name, Math.round(MINF + Math.pow(t, 0.85) * (MAXF - MINF))];
+    });
+
     let i = 0;
-    const G = 2;
-    const cx = side / 2, cy = h / 2;
-    const R_out = Math.min(cy * 0.95 / 0.80, cx * 0.95 / 0.72);
-
-    // ハードマスク方式: 雲の外側を占有ピクセルで塗り潰す → wordcloud2
-    // (clearCanvas:false) は雲の内側にしか語を置けず ☁️ シルエットになる。
-    // 描画後にマスク色だけ透明化するので枠線は残らない。
-    const MASK = [171, 205, 239];
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = `rgb(${MASK.join(',')})`;
-    ctx.fillRect(0, 0, side, h);
-    // 雲(泡の並集)を destination-out で切り抜く
-    ctx.globalCompositeOperation = 'destination-out';
-    for (const p of CLOUD_PUFFS) {
-      ctx.beginPath();
-      ctx.arc(cx + p.x * R_out, cy + p.y * R_out, p.r * R_out, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 底のはみ出しを再マスク(平らな底)
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = `rgb(${MASK.join(',')})`;
-    ctx.fillRect(0, cy + 0.46 * R_out, side, h);
-
-    canvas.addEventListener('wordcloudstop', () => {
-      const img = ctx.getImageData(0, 0, side, h);
-      const d = img.data;
-      for (let p = 0; p < d.length; p += 4) {
-        if (Math.abs(d[p] - MASK[0]) <= 30 && Math.abs(d[p + 1] - MASK[1]) <= 30 &&
-            Math.abs(d[p + 2] - MASK[2]) <= 30) d[p + 3] = 0;
-      }
-      ctx.putImageData(img, 0, 0);
-    }, { once: true });
-
-    // 語は頻度どおりの大きさで、詰め込みすぎない(ふんわり)
-    const mainW = v => max === min ? 26 : 16 + (v - min) / (max - min) * 26; // 16~42px
-    const list = cloud.map(c => [c.name, mainW(c.value)]);
-    list.sort((a, b) => b[1] - a[1]);  // 大きい語から配置
-
     WordCloud(canvas, {
       list,
-      clearCanvas: false,   // マスクを活かす
-      gridSize: 8,          // 大きめグリッド = 語間にゆとり(詰め込まない)
-      weightFactor: w => w,
+      gridSize: Math.round(4 * dpr),          // 密に噛み合わせる
+      weightFactor: w => w * dpr,
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
       color: () => COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0,
-      ellipticity: 1, drawOutOfBound: false, shrinkToFit: false,
+      rotateRatio: 0.12,                      // 縦組みは少数のアクセントに留める
+      rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: -Math.PI / 2,
+      shape: 'circle',
+      ellipticity: 0.62,                      // 横に広い楕円の塊 = 王道の雲形
+      drawOutOfBound: false, shrinkToFit: true,
     });
     return;
   }
