@@ -115,6 +115,13 @@ function scoreBar(s) {
     <span style="font-size:11px;color:var(--text-muted);width:20px;text-align:right;">${s}</span></div>`;
 }
 
+// 住みやすさは高/中/低の3段階 → そのままラベル表示 (高=緑 好 / 中=橙 / 低=赤)
+function levelTag(lv) {
+  if (!lv) return '<span style="color:var(--text-muted);">-</span>';
+  const cls = lv === '高' ? 'good' : lv === '中' ? 'warn' : 'bad';
+  return `<span class="tag ${cls}">${lv}</span>`;
+}
+
 function renderTable() {
   const tbody = document.querySelector('#region-table tbody');
   if (!tbody) return;
@@ -130,9 +137,9 @@ function renderTable() {
     <td>${r.avg_rent ? man(r.avg_rent) : '-'}</td>
     <td title="${r.trade_count ? `直近4四半期 ${r.trade_count}件 (中古マンション等, 出典: 不動産情報ライブラリ)` : ''}">${r.trade_price_per_m2 ? man(r.trade_price_per_m2) : '-'}</td>
     <td>${scoreBar(r.overall_score)}</td>
-    <td>${scoreBar(r.safety_score)}</td>
-    <td>${scoreBar(r.convenience_score)}</td>
-    <td>${scoreBar(r.environment_score)}</td>
+    <td>${levelTag(r.safety_level)}</td>
+    <td>${levelTag(r.convenience_level)}</td>
+    <td>${levelTag(r.environment_level)}</td>
     <td>${r.hazard_level ? `<span class="tag ${r.hazard_level === '高' ? 'hazard-high' : r.hazard_level === '中' ? 'warn' : 'good'}" title="洪水・土砂 (出典: 不動産情報ライブラリ, 区役所周辺の参考値)">${r.hazard_level}</span>` : '-'}</td>
   </tr>`).join('');
 }
