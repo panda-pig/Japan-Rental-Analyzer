@@ -71,6 +71,33 @@ body {
   border-radius: 3px;
 }
 
+/* キーボードで最初に到達 → 本文へジャンプ */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.12);
+  transition: top var(--transition);
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* 並び替え中の列に付く小さな矢印 */
+.sort-arrow {
+  font-size: 10px;
+  color: var(--accent);
+}
+
 /* ===== Navigation ===== */
 .nav {
   background: rgba(250, 249, 245, 0.9);

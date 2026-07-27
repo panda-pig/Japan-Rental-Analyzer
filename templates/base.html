@@ -15,7 +15,8 @@
 </head>
 <body>
 {% set p = request.path %}
-<nav class="nav">
+<a class="skip-link" href="#main">本文へスキップ</a>
+<nav class="nav" aria-label="メインナビゲーション">
   <a class="nav-brand" href="/">
     <span class="nav-brand-icon">J</span>
     <span class="nav-brand-name">Japan Rental Analyzer</span>
@@ -26,9 +27,9 @@
   <a class="nav-link{% if p == '/compare' %} active{% endif %}" href="/compare">比較</a>
   <a class="nav-link{% if p == '/settings' %} active{% endif %}" href="/settings">設定</a>
 </nav>
-<div class="container">
+<main class="container" id="main">
 {% block content %}{% endblock %}
-</div>
+</main>
 <script src="/static/js/{% block js %}{% endblock %}"></script>
 </body>
 </html>

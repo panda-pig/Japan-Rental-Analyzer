@@ -32,7 +32,7 @@ async function load() {
   set("p_prepaid", p.prepaid_rent_months);
   set("p_misc", p.misc_cost);
   document.getElementById("weights").innerHTML = WEIGHT_FIELDS.map(([k, l]) =>
-    `<div><label>${l}</label><input type="number" id="w_${k}" value="${p[k]}" oninput="updateTotal()"></div>`).join("");
+    `<div><label for="w_${k}">${l}</label><input type="number" id="w_${k}" value="${p[k]}" oninput="updateTotal()"></div>`).join("");
   updateTotal();
 }
 

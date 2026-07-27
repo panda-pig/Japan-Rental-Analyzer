@@ -144,6 +144,23 @@ function renderTable() {
   </tr>`).join('');
 }
 
+// 现在の並び替え状態を aria-sort と矢印で表示 (スクリーンリーダー + 視覚)
+function updateSortIndicators() {
+  document.querySelectorAll('#region-table th[data-sort]').forEach(th => {
+    const active = th.dataset.sort === tableSort.key;
+    const asc = tableSort.dir === 1;
+    th.setAttribute('aria-sort', active ? (asc ? 'ascending' : 'descending') : 'none');
+    th.querySelector('.sort-arrow')?.remove();
+    if (active) {
+      const a = document.createElement('span');
+      a.className = 'sort-arrow';
+      a.setAttribute('aria-hidden', 'true');
+      a.textContent = asc ? ' ▲' : ' ▼';
+      th.appendChild(a);
+    }
+  });
+}
+
 function metricCard(num, label, cls, sub) {
   return `<div class="metric ${cls || ''}"><div class="num">${num}</div><div class="label">${label}</div>${sub ? `<div class="label" style="color:var(--text-secondary);margin-top:2px;">${sub}</div>` : ''}</div>`;
 }
@@ -177,12 +194,20 @@ async function load() {
   renderTable();
   document.querySelectorAll('#region-table th[data-sort]').forEach(th => {
     th.style.cursor = 'pointer';
-    th.addEventListener('click', () => {
+    th.tabIndex = 0;
+    th.setAttribute('role', 'button');
+    const sortBy = () => {
       const k = th.dataset.sort;
       tableSort = { key: k, dir: tableSort.key === k ? -tableSort.dir : (k === 'name' ? 1 : -1) };
       renderTable();
+      updateSortIndicators();
+    };
+    th.addEventListener('click', sortBy);
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); }
     });
   });
+  updateSortIndicators();
 }
 
 let _rz;

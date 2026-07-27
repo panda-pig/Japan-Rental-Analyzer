@@ -560,8 +560,9 @@ function poolHtml(pool, d) {
       `<span class="dev-badge ${dev > 0 ? 'pricey' : 'cheap'}">${dev > 0 ? '+' : ''}${Math.round(dev * 100)}%</span>`;
     const sel = l.id === state.selectedId ? ' style="background:var(--accent-bg,#EFF4FF);"' : '';
     const favMark = l.fav_status ? `<span class="fav-star" title="${l.fav_status}">★</span>` : '';
-    return `<tr data-id="${l.id}" class="pool-row"${sel}>
-      <td><input type="checkbox" class="pool-check" data-id="${l.id}"></td>
+    const title = l.title || '(名称未設定)';
+    return `<tr data-id="${l.id}" class="pool-row"${sel} tabindex="0" role="button" aria-label="${title} のレポートを表示">
+      <td><input type="checkbox" class="pool-check" data-id="${l.id}" aria-label="${title} を比較に追加"></td>
       <td><span class="${badgeCls(l.total_score)}">${l.total_score ?? '-'}</span></td>
       <td style="font-weight:600;color:var(--text-primary);">${l.title || ''} ${favMark}</td>
       <td>${l.ward || '-'}</td>
@@ -569,7 +570,7 @@ function poolHtml(pool, d) {
       <td>${l.area_m2 || '?'}㎡</td>
       <td>${devHtml}</td>
       <td><button class="link-btn pool-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">${l.fav_status ? '解除' : '気になる'}</button></td>
-      <td>${l.detail_url ? `<a href="${l.detail_url}" target="_blank" rel="noopener" style="color:var(--accent);">→</a>` : ''}</td>
+      <td>${l.detail_url ? `<a href="${l.detail_url}" target="_blank" rel="noopener" aria-label="${title} を元サイトで開く" title="元サイトで開く" style="color:var(--accent);">→</a>` : ''}</td>
     </tr>`;
   }).join('');
 
@@ -660,10 +661,14 @@ async function toggleFav(id, favId) {
 function wirePoolHandlers() {
   // 行点击切换报告(排除 checkbox / 按钮 / 链接)
   document.querySelectorAll('.pool-row').forEach(tr => {
+    const select = () => { state.selectedId = parseInt(tr.dataset.id, 10); render(); };
     tr.addEventListener('click', e => {
       if (e.target.closest('input,button,a')) return;
-      state.selectedId = parseInt(tr.dataset.id, 10);
-      render();
+      select();
+    });
+    tr.addEventListener('keydown', e => {
+      if (e.target.closest('input,button,a')) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
     });
   });
   document.querySelectorAll('.pool-check').forEach(cb => cb.addEventListener('change', updateCompareBtn));
