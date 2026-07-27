@@ -1,7 +1,7 @@
 // ===== 物件分析页：URL解析 + 单套报告 + 房源池(累积/点选/多选对比/收藏) =====
 
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-const COLORS = { primary: '#56696E', good: '#5C7A5B', warn: '#A97A2E', bad: '#A85450', text: '#6E6C63', muted: '#A6A398', border: '#E7E4DB',
+const COLORS = { primary: '#56696E', good: '#527051', warn: '#8C6220', bad: '#9E4A46', text: '#6E6C63', muted: '#767366', border: '#E7E4DB',
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82', '#6E7A82', '#B08A6E'] };
 const BASE_OPT = {
   textStyle: { fontFamily: CHART_FONT, color: COLORS.text, fontSize: 12 },

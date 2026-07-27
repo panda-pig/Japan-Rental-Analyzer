@@ -9,7 +9,7 @@
 
   --text-primary: #2B2A26;   /* 墨 */
   --text-secondary: #6E6C63;
-  --text-muted: #A6A398;
+  --text-muted: #767366;     /* WCAG AA: 4.5:1 on bg/surface (was #A6A398 ≈2.4:1) */
   --text-inverse: #FFFFFF;
 
   --accent: #56696E;         /* 藍鼠 muted blue-gray */
@@ -18,13 +18,13 @@
   --accent-bg: #EDF1F1;
   --accent-border: #CBD5D5;
 
-  --good: #5C7A5B;           /* 苔緑 sage */
+  --good: #527051;           /* 苔緑 sage — AA on white & good-bg */
   --good-bg: #EEF3EC;
   --good-border: #CBDBC6;
-  --warn: #A97A2E;           /* 山吹くすみ */
+  --warn: #8C6220;           /* 山吹くすみ — AA on white & warn-bg (was #A97A2E ≈3.4:1) */
   --warn-bg: #F7F1E4;
   --warn-border: #E7D6AE;
-  --bad: #A85450;            /* 弁柄 muted terracotta */
+  --bad: #9E4A46;            /* 弁柄 muted terracotta — AA on white & bad-bg */
   --bad-bg: #F6ECEA;
   --bad-border: #E4C4BF;
 
@@ -396,7 +396,7 @@ body {
 
 .tag.accent { background: var(--accent-bg); color: var(--accent-deep); }
 .tag.good { background: var(--good-bg); color: var(--good); }
-.tag.muted { background: var(--bg-alt); color: var(--text-muted); }
+.tag.muted { background: var(--bg-alt); color: var(--tag-text); }
 .tag.warn { background: var(--warn-bg); color: var(--warn); }
 .tag.bad { background: var(--bad-bg); color: var(--bad); }
 

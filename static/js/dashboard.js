@@ -1,6 +1,6 @@
 const CHART = {
-  primary: '#56696E', good: '#5C7A5B', warn: '#A97A2E', bad: '#A85450',
-  text: '#6E6C63', textMuted: '#A6A398', border: '#E7E4DB',
+  primary: '#56696E', good: '#527051', warn: '#8C6220', bad: '#9E4A46',
+  text: '#6E6C63', textMuted: '#767366', border: '#E7E4DB',
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82'],
 };
 const CHART_FONT = "'Noto Sans JP', sans-serif";
