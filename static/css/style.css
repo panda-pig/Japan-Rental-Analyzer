@@ -706,3 +706,59 @@ select:focus, input:focus {
   .hero-steps { grid-template-columns: 1fr; gap: 8px; }
   .hero-actions .btn-lg { flex: 1; }
 }
+
+/* ===== タップ領域 — 狭い画面 / タッチ端末で指で押せる最小サイズを確保 ===== */
+@media (max-width: 768px), (pointer: coarse) {
+  .btn,
+  .nav a.nav-link,
+  .nav-brand,
+  .skip-link {
+    min-height: 44px;
+  }
+
+  /* 小画面ではブランド名が隠れアイコンのみ (26px) になるため横幅を確保 */
+  .nav-brand { min-width: 44px; }
+
+  /* 表内の小さな文字ボタン (気になる/解除) — 行内で押しやすく */
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    margin: 0 -8px;
+    white-space: nowrap;   /* 折り返して細くならないように (表は横スクロール可) */
+  }
+
+  /* アイコンのみのリンク (→) — 文字は小さいが領域は44px確保 */
+  #pool-table a[target="_blank"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    margin: -12px -8px;
+  }
+
+  /* 比較チェックボックス — 13px では小さすぎる (WCAG 2.5.8 の 24px を確保) */
+  .pool-check {
+    width: 24px;
+    height: 24px;
+    margin: 10px 6px;
+  }
+
+  /* フォーム部品も指で押せる高さに */
+  input[type="text"],
+  input[type="number"],
+  select,
+  .select {
+    min-height: 44px;
+  }
+
+  /* 並び替え見出し — 縦は行高で足りるので横幅を確保 */
+  #region-table th[data-sort] {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
