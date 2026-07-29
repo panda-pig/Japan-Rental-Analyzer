@@ -3,7 +3,10 @@
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const COLORS = { primary: '#56696E', good: '#527051', warn: '#8C6220', bad: '#9E4A46', text: '#6E6C63', muted: '#767366', border: '#E7E4DB',
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82', '#6E7A82', '#B08A6E'] };
+// OS の「視差効果を減らす」設定時はグラフの登場アニメーションも止める
+const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const BASE_OPT = {
+  animation: !REDUCE_MOTION,
   textStyle: { fontFamily: CHART_FONT, color: COLORS.text, fontSize: 12 },
   tooltip: { backgroundColor: '#FFFFFF', borderColor: COLORS.border, borderWidth: 1,
     textStyle: { fontFamily: CHART_FONT, color: '#2B2A26', fontSize: 12 },

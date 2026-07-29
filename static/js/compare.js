@@ -16,6 +16,8 @@ function drawCompareRadar(data) {
   if (radarChart) radarChart.dispose();
   radarChart = echarts.init(el);
   radarChart.setOption({
+    // OS の「視差効果を減らす」設定時は登場アニメーションを止める
+    animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     textStyle: { fontFamily: CHART_FONT, color: '#6E6C63', fontSize: 12 },
     tooltip: {
       backgroundColor: '#FFFFFF', borderColor: '#E7E4DB', borderWidth: 1,

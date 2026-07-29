@@ -49,6 +49,18 @@
 
 html { scroll-behavior: smooth; }
 
+/* 前庭障害への配慮: OS で「視差効果を減らす」設定時は動きを止める */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:active { transform: none; }
+}
+
 body {
   font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
     "Yu Gothic", sans-serif;

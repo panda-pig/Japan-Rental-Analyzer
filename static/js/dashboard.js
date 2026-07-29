@@ -4,7 +4,10 @@ const CHART = {
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82'],
 };
 const CHART_FONT = "'Noto Sans JP', sans-serif";
+// OS の「視差効果を減らす」設定時はグラフの登場アニメーションも止める
+const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const BASE_OPTION = {
+  animation: !REDUCE_MOTION,
   textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 12 },
   tooltip: {
     backgroundColor: '#FFFFFF', borderColor: CHART.border, borderWidth: 1,
