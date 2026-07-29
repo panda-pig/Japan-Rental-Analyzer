@@ -5,14 +5,15 @@
 
 <!-- URL输入框 -->
 <div class="card" style="margin-bottom:24px;">
-  <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+  <p id="import-help" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
     物件詳細ページのURLを貼り付けてください。自動で解析し、エリア平均と比較します。
   </p>
   <div style="display:flex;gap:8px;">
-    <input type="text" id="import-url" placeholder="https://suumo.jp/chintai/jnc_xxxxx/ または https://www.homes.co.jp/chintai/room/..." style="flex:1;">
+    <label class="sr-only" for="import-url">物件詳細ページのURL</label>
+    <input type="text" id="import-url" aria-describedby="import-help" placeholder="https://suumo.jp/chintai/jnc_xxxxx/ または https://www.homes.co.jp/chintai/room/..." style="flex:1;">
     <button class="btn btn-primary" id="import-btn" onclick="importAndAnalyze()">解析</button>
   </div>
-  <div id="import-result" style="margin-top:12px;font-size:13px;"></div>
+  <div id="import-result" role="status" aria-live="polite" aria-atomic="true" style="margin-top:12px;font-size:13px;"></div>
 </div>
 
 <!-- 分析报告容器 -->

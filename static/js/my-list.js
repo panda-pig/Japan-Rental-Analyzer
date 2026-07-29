@@ -16,15 +16,40 @@ const BASE_OPT = {
 const state = { data: null, selectedId: null, sort: 'score_desc' };
 const regionCache = {};
 
+// canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
+function chartA11y(el, label) {
+  if (!el) return;
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', label);
+}
+const yen = v => (v || 0).toLocaleString() + '円';
+
 // ---------- URL导入 ----------
+// #import-result は aria-live 領域。エラー時は入力欄に aria-invalid を立て、
+// スクリーンリーダーが結果を読み上げられるようにする。
+function setImportMsg(text, kind) {
+  const el = document.getElementById('import-result');
+  const input = document.getElementById('import-url');
+  const color = kind === 'error' ? 'var(--bad)' : kind === 'ok' ? 'var(--good)' : 'var(--text-muted)';
+  const weight = kind === 'ok' ? 'font-weight:600;' : '';
+  el.innerHTML = `<span style="color:${color};${weight}">${text}</span>`;
+  if (input) {
+    if (kind === 'error') input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+}
+
 async function importAndAnalyze() {
   const url = document.getElementById('import-url').value.trim();
-  const el = document.getElementById('import-result');
   const btn = document.getElementById('import-btn');
-  if (!url) { el.innerHTML = '<span style="color:var(--bad);">URLを入力してください</span>'; return; }
+  if (!url) {
+    setImportMsg('URLを入力してください', 'error');
+    document.getElementById('import-url').focus();
+    return;
+  }
   if (btn && btn.disabled) return;  // 防止重复提交
   if (btn) { btn.disabled = true; btn.textContent = '解析中…'; }
-  el.innerHTML = '<span style="color:var(--text-muted);">解析中… ページを取得しています(数秒かかります)</span>';
+  setImportMsg('解析中… ページを取得しています(数秒かかります)', 'busy');
   try {
     const res = await fetch('/api/import/detail', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -34,23 +59,23 @@ async function importAndAnalyze() {
       const errText = await res.text();
       try {
         const errJson = JSON.parse(errText);
-        el.innerHTML = '<span style="color:var(--bad);">' + (errJson.error || '解析エラー') + '</span>';
+        setImportMsg(errJson.error || '解析エラー', 'error');
       } catch (e2) {
-        el.innerHTML = '<span style="color:var(--bad);">解析に失敗しました(HTTP ' + res.status + ')</span>';
+        setImportMsg('解析に失敗しました(HTTP ' + res.status + ')', 'error');
       }
       return;
     }
     const d = await res.json();
     if (d.error) {
-      el.innerHTML = '<span style="color:var(--bad);">' + d.error + '</span>';
+      setImportMsg(d.error, 'error');
     } else {
-      el.innerHTML = '<span style="color:var(--good);font-weight:600;">' + (d.message || '解析しました') + '</span>';
+      setImportMsg(d.message || '解析しました', 'ok');
       document.getElementById('import-url').value = '';
       if (d.id) state.selectedId = d.id;   // 新解析的这套优先显示
       await loadAnalysis();
     }
   } catch (e) {
-    el.innerHTML = '<span style="color:var(--bad);">通信エラー: ' + e.message + '</span>';
+    setImportMsg('通信エラー: ' + e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '解析'; }
   }
@@ -62,6 +87,9 @@ function toast(msg, ok = true) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'ml-toast';
+    el.setAttribute('role', 'status');       // 読み上げ対象にする
+    el.setAttribute('aria-live', 'polite');
+    el.setAttribute('aria-atomic', 'true');
     el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(16,24,40,0.16);color:#fff;transition:opacity .3s;';
     document.body.appendChild(el);
   }
@@ -151,6 +179,9 @@ function drawWordCloud(cloud) {
   if (!el || !cloud || !cloud.length) return;
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
+  // canvas 描画は読み上げ不能なので、頻度順のテキストを代替として持たせる
+  chartA11y(el, '設備・特徴の頻度を表すワードクラウド。多い順に' +
+    [...cloud].sort((a, b) => b.value - a.value).map(c => `${c.name}${c.value}件`).join('、') + '。');
 
   // 王道のワードクラウド: 強い字数コントラスト + 密な噛み合わせ + 一部縦組み
   if (typeof WordCloud === 'function') {
@@ -248,6 +279,8 @@ async function renderEmpty(container) {
 function drawRegionBar(elId, rows) {
   const el = document.getElementById(elId);
   if (!el || !rows || !rows.length) { if (el) el.innerHTML = '<div class="empty-state">データなし</div>'; return; }
+  chartA11y(el, `エリア別の平均相場(横棒グラフ)。${rows.length}エリア。` +
+    rows.map(r => `${r.name}は${yen(r.value)}`).join('、') + '。');
   echarts.init(el).setOption({
     ...BASE_OPT,
     grid: { left: 90, right: 30, top: 10, bottom: 30 },
@@ -442,22 +475,26 @@ function drawReportCharts(l, region, prefs) {
   if (!l || l.total_score == null) return;
   const rEl = document.getElementById('chart-radar-single');
   if (rEl) {
+    const DIMS = [
+      { name: '予算', max: 20 }, { name: '面積', max: 15 }, { name: '通勤', max: 15 },
+      { name: '階数', max: 10 }, { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
+      { name: '築年数', max: 10 }, { name: '初期費用', max: 5 },
+    ];
+    const vals = [l.budget_score || 0, l.area_score || 0, l.commute_score || 0, l.floor_score || 0,
+                  l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0];
+    chartA11y(rEl, `8次元スコアのレーダーチャート。総合${l.total_score}点。` +
+      DIMS.map((d, i) => `${d.name}${vals[i]}/${d.max}`).join('、') + '。');
     echarts.init(rEl).setOption({
       ...BASE_OPT,
       radar: {
-        indicator: [
-          { name: '予算', max: 20 }, { name: '面積', max: 15 }, { name: '通勤', max: 15 },
-          { name: '階数', max: 10 }, { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
-          { name: '築年数', max: 10 }, { name: '初期費用', max: 5 },
-        ],
+        indicator: DIMS,
         shape: 'polygon', radius: '65%',
         axisName: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 11 },
       },
       series: [{
         type: 'radar',
         data: [{
-          value: [l.budget_score || 0, l.area_score || 0, l.commute_score || 0, l.floor_score || 0,
-                  l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0],
+          value: vals,
           name: l.title,
           itemStyle: { color: COLORS.primary }, areaStyle: { opacity: 0.15 },
         }],
@@ -477,6 +514,8 @@ function drawReportCharts(l, region, prefs) {
       { name: '諸費用', value: p.misc_cost || 0 },
     ].filter(x => x.value > 0);
     const total = parts.reduce((s, x) => s + x.value, 0);
+    chartA11y(iEl, `初期費用の内訳(ドーナツグラフ)。概算合計${yen(total)}。` +
+      parts.map(x => `${x.name}${yen(x.value)}`).join('、') + '。');
     echarts.init(iEl).setOption({
       ...BASE_OPT,
       tooltip: { ...BASE_OPT.tooltip, formatter: p2 => `${p2.name}<br>${p2.value.toLocaleString()}円 (${p2.percent}%)` },
@@ -492,6 +531,9 @@ function drawReportCharts(l, region, prefs) {
   }
   const bEl = document.getElementById('chart-compare-bar');
   if (bEl && l.region_avg_rent && l.total_monthly_cost) {
+    const diff = l.total_monthly_cost - l.region_avg_rent;
+    chartA11y(bEl, `月額とエリア平均の比較(棒グラフ)。この物件${yen(l.total_monthly_cost)}、` +
+      `エリア平均${yen(l.region_avg_rent)}。エリア平均より${yen(Math.abs(diff))}${diff > 0 ? '高い' : '安い'}。`);
     echarts.init(bEl).setOption({
       ...BASE_OPT,
       xAxis: { type: 'category', data: ['この物件', 'エリア平均'] },
@@ -511,6 +553,10 @@ function drawReportCharts(l, region, prefs) {
   if (hEl) {
     const hist = (state.data.price_history || []).filter(h => h.id === l.id)
       .sort((a, b) => (a.checked_at || '').localeCompare(b.checked_at || ''));
+    chartA11y(hEl, hist.length < 2
+      ? '価格推移の折れ線グラフ。まだ履歴が1件のため推移はありません。'
+      : `価格推移の折れ線グラフ。${hist.length}件の記録。` +
+        hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
     echarts.init(hEl).setOption({
       ...BASE_OPT,
       grid: { left: 60, right: 24, top: 20, bottom: 40 },
@@ -602,6 +648,9 @@ function poolHtml(pool, d) {
 function drawLayoutPie(dist) {
   const el = document.getElementById('chart-layout');
   if (!el || !dist || !dist.length) return;
+  const tot = dist.reduce((s, x) => s + x.value, 0);
+  chartA11y(el, `物件プールの間取り分布(円グラフ)。全${tot}件。` +
+    dist.map(x => `${x.name}${x.value}件`).join('、') + '。');
   echarts.init(el).setOption({
     ...BASE_OPT,
     tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.name}: ${p.value}件 (${p.percent}%)` },
@@ -619,6 +668,8 @@ function drawScatter(scatter) {
   const el = document.getElementById('chart-scatter');
   if (!el || !scatter || !scatter.length) return;
   const pts = scatter.filter(p => p.x && p.y);
+  chartA11y(el, `コスパ散布図。横軸が面積、縦軸が月額で、${pts.length}件を表示。` +
+    pts.map(p => `${p.name}は${p.x}㎡ ${yen(p.y)}`).join('、') + '。');
   const avgLine = [];
   const withAvg = pts.filter(p => p.region_avg);
   if (withAvg.length) {

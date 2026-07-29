@@ -30,7 +30,7 @@
 <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
   <button class="btn btn-primary" onclick="save()">保存</button>
   <button class="btn btn-ghost" onclick="recalc()">保存して再計算</button>
-  <span id="save-msg" style="font-size:13px;font-weight:600;"></span>
+  <span id="save-msg" role="status" aria-live="polite" aria-atomic="true" style="font-size:13px;font-weight:600;"></span>
 </div>
 {% endblock %}
 {% block js %}settings.js{% endblock %}

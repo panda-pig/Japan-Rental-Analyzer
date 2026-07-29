@@ -32,8 +32,20 @@ function regionGroup(r) {
 }
 const GROUP_COLOR = { '東京23区': CHART.palette[0], '横浜市': CHART.palette[1], '川崎市': CHART.palette[2], '主要都市': CHART.palette[3] };
 
+// canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
+function chartA11y(el, label) {
+  if (!el) return;
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', label);
+}
+const TABLE_HINT = '数値の詳細はページ下部の「全エリア一覧」の表を参照してください。';
+
 function bar(id, data) {
   const el = document.getElementById(id); if (!el || !data || !data.length) return;
+  const sorted = [...data].sort((a, b) => b.value - a.value);
+  const hi = sorted[0], lo = sorted[sorted.length - 1];
+  chartA11y(el, `相場ランキングの棒グラフ。${data.length}エリア。` +
+    `最も高いのは${hi.name} ${man(hi.value)}円、最も安いのは${lo.name} ${man(lo.value)}円。${TABLE_HINT}`);
   echarts.init(el).setOption({
     ...BASE_OPTION,
     grid: { top: 16, right: 16, bottom: 70, left: 40, containLabel: true },
@@ -53,6 +65,12 @@ function valueMap() {
   if (!rented.length) return;
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
+  // 「安くて評価が高い」= 割安度の高い順に上位3件を代替テキストにする
+  const best = [...rented].sort((a, b) => (b.overall_score / b.avg_rent) - (a.overall_score / a.avg_rent)).slice(0, 3);
+  chartA11y(el, `狙い目エリアマップ。横軸が相場、縦軸が総合評価の散布図で、${rented.length}エリアを表示。` +
+    `相場の中央値は${man(medRent)}円。左上ほど「安くて評価が高い」エリアで、上位は` +
+    best.map(r => `${regionName(r)}(相場${man(r.avg_rent)}円 / 評価${r.overall_score})`).join('、') +
+    `。${TABLE_HINT}`);
   const groups = {};
   rented.forEach(r => { const g = regionGroup(r); (groups[g] = groups[g] || []).push(r); });
   const series = Object.entries(groups).map(([g, arr]) => ({
@@ -106,9 +124,14 @@ function renderRegionRadar() {
     });
   }
   if (!series.length) return;
+  const dims = ['安全性', '便利度', '環境', '相場の高さ'];
   radar('chart-region-radar',
-    [{ name: '安全性', max: 100 }, { name: '便利度', max: 100 }, { name: '環境', max: 100 }, { name: '相場の高さ', max: 100 }],
+    dims.map(name => ({ name, max: 100 })),
     series);
+  // 選択が変わるたびに代替テキストも更新する
+  chartA11y(document.getElementById('chart-region-radar'),
+    'エリア比較レーダーチャート。各項目は100点満点。' +
+    series.map(s => `${s.name}は` + dims.map((d, i) => `${d}${s.value[i]}`).join('、')).join('。') + '。');
 }
 
 function scoreBar(s) {

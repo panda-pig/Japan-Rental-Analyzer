@@ -13,6 +13,11 @@ function drawCompareRadar(data) {
   const scored = data.filter(l => l.total_score != null);
   if (!el || scored.length < 2) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
+  // canvas はスクリーンリーダーには空 → role=img + 各物件のスコアを読み上げ可能にする
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', `${scored.length}件の物件を8次元スコアで比較するレーダーチャート。` +
+    scored.map(l => `${l.title}は総合${l.total_score}点`).join('、') +
+    '。項目ごとの数値は下の比較表を参照してください。');
   if (radarChart) radarChart.dispose();
   radarChart = echarts.init(el);
   radarChart.setOption({
