@@ -21,6 +21,16 @@ let regionData = [];
 let scoreByWard = {};
 let tableSort = { key: 'overall_score', dir: -1 };
 
+// 既存インスタンスを使い回し、リサイズ時は resize() だけ呼ぶ (再取得・再描画しない)
+const chartRegistry = {};
+function initChart(el) {
+  const prev = chartRegistry[el.id];
+  if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
+  const c = echarts.getInstanceByDom(el) || echarts.init(el);
+  chartRegistry[el.id] = c;
+  return c;
+}
+
 const man = v => (v / 10000).toFixed(1) + '万';
 const regionName = r => r.ward || r.city || r.prefecture || '-';
 function scoreColor(s) { return s >= 75 ? CHART.good : s >= 60 ? CHART.primary : s >= 45 ? CHART.warn : CHART.bad; }
@@ -46,7 +56,7 @@ function bar(id, data) {
   const hi = sorted[0], lo = sorted[sorted.length - 1];
   chartA11y(el, `相場ランキングの棒グラフ。${data.length}エリア。` +
     `最も高いのは${hi.name} ${man(hi.value)}円、最も安いのは${lo.name} ${man(lo.value)}円。${TABLE_HINT}`);
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPTION,
     grid: { top: 16, right: 16, bottom: 70, left: 40, containLabel: true },
     xAxis: { type: 'category', data: data.map(x => x.name), axisLabel: { color: CHART.text, fontSize: 10, rotate: 45 }, axisLine: { lineStyle: { color: CHART.border } } },
@@ -83,7 +93,7 @@ function valueMap() {
       data: [{ xAxis: medRent, label: { formatter: '相場中央値' } }, { yAxis: 60, label: { formatter: '評価60' } }],
     } : undefined,
   }));
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPTION,
     grid: { top: 40, right: 24, bottom: 60, left: 56, containLabel: true },
     legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 12 } },
@@ -96,7 +106,7 @@ function valueMap() {
 
 function radar(id, indicators, seriesData) {
   const el = document.getElementById(id); if (!el) return;
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPTION,
     legend: { bottom: 0, textStyle: { fontFamily: CHART_FONT, color: CHART.text, fontSize: 11 } },
     radar: {
@@ -236,6 +246,12 @@ async function load() {
   updateSortIndicators();
 }
 
+// リサイズでデータを取り直す必要はない。既存グラフの寸法だけ合わせる。
 let _rz;
-window.addEventListener('resize', () => { clearTimeout(_rz); _rz = setTimeout(load, 300); });
+window.addEventListener('resize', () => {
+  clearTimeout(_rz);
+  _rz = setTimeout(() => {
+    Object.values(chartRegistry).forEach(c => { if (!c.isDisposed()) c.resize(); });
+  }, 200);
+});
 load();

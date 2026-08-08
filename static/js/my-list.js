@@ -16,6 +16,17 @@ const BASE_OPT = {
 const state = { data: null, selectedId: null, sort: 'score_desc' };
 const regionCache = {};
 
+// 既存インスタンスを使い回し、リサイズ時は resize() だけ呼ぶ (DOM 再構築しない)
+const chartRegistry = {};
+function initChart(el) {
+  // render() が innerHTML を作り直すと旧インスタンスは孤立するので破棄しておく
+  const prev = chartRegistry[el.id];
+  if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
+  const c = echarts.getInstanceByDom(el) || echarts.init(el);
+  chartRegistry[el.id] = c;
+  return c;
+}
+
 // canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
 function chartA11y(el, label) {
   if (!el) return;
@@ -281,7 +292,7 @@ function drawRegionBar(elId, rows) {
   if (!el || !rows || !rows.length) { if (el) el.innerHTML = '<div class="empty-state">データなし</div>'; return; }
   chartA11y(el, `エリア別の平均相場(横棒グラフ)。${rows.length}エリア。` +
     rows.map(r => `${r.name}は${yen(r.value)}`).join('、') + '。');
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPT,
     grid: { left: 90, right: 30, top: 10, bottom: 30 },
     xAxis: { type: 'value', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
@@ -484,7 +495,7 @@ function drawReportCharts(l, region, prefs) {
                   l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0];
     chartA11y(rEl, `8次元スコアのレーダーチャート。総合${l.total_score}点。` +
       DIMS.map((d, i) => `${d.name}${vals[i]}/${d.max}`).join('、') + '。');
-    echarts.init(rEl).setOption({
+    initChart(rEl).setOption({
       ...BASE_OPT,
       radar: {
         indicator: DIMS,
@@ -516,7 +527,7 @@ function drawReportCharts(l, region, prefs) {
     const total = parts.reduce((s, x) => s + x.value, 0);
     chartA11y(iEl, `初期費用の内訳(ドーナツグラフ)。概算合計${yen(total)}。` +
       parts.map(x => `${x.name}${yen(x.value)}`).join('、') + '。');
-    echarts.init(iEl).setOption({
+    initChart(iEl).setOption({
       ...BASE_OPT,
       tooltip: { ...BASE_OPT.tooltip, formatter: p2 => `${p2.name}<br>${p2.value.toLocaleString()}円 (${p2.percent}%)` },
       legend: { bottom: 0, textStyle: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 11 } },
@@ -534,7 +545,7 @@ function drawReportCharts(l, region, prefs) {
     const diff = l.total_monthly_cost - l.region_avg_rent;
     chartA11y(bEl, `月額とエリア平均の比較(棒グラフ)。この物件${yen(l.total_monthly_cost)}、` +
       `エリア平均${yen(l.region_avg_rent)}。エリア平均より${yen(Math.abs(diff))}${diff > 0 ? '高い' : '安い'}。`);
-    echarts.init(bEl).setOption({
+    initChart(bEl).setOption({
       ...BASE_OPT,
       xAxis: { type: 'category', data: ['この物件', 'エリア平均'] },
       yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted } },
@@ -557,7 +568,7 @@ function drawReportCharts(l, region, prefs) {
       ? '価格推移の折れ線グラフ。まだ履歴が1件のため推移はありません。'
       : `価格推移の折れ線グラフ。${hist.length}件の記録。` +
         hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
-    echarts.init(hEl).setOption({
+    initChart(hEl).setOption({
       ...BASE_OPT,
       grid: { left: 60, right: 24, top: 20, bottom: 40 },
       xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
@@ -651,7 +662,7 @@ function drawLayoutPie(dist) {
   const tot = dist.reduce((s, x) => s + x.value, 0);
   chartA11y(el, `物件プールの間取り分布(円グラフ)。全${tot}件。` +
     dist.map(x => `${x.name}${x.value}件`).join('、') + '。');
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPT,
     tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.name}: ${p.value}件 (${p.percent}%)` },
     legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 12 } },
@@ -676,7 +687,7 @@ function drawScatter(scatter) {
     const avg = withAvg.reduce((s, p) => s + p.region_avg, 0) / withAvg.length;
     avgLine.push({ yAxis: avg, label: { formatter: 'エリア平均 ' + Math.round(avg / 10000) + '万', color: COLORS.warn } });
   }
-  echarts.init(el).setOption({
+  initChart(el).setOption({
     ...BASE_OPT,
     tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.data.name}<br>${p.data.ward || ''}<br>面積 ${p.data.value[0]}㎡ / 月額 ${p.data.value[1].toLocaleString()}円` },
     grid: { left: 60, right: 30, top: 20, bottom: 40 },
@@ -756,10 +767,16 @@ function wirePoolHandlers() {
 }
 
 // ---------- 初始化 ----------
+// リサイズで DOM を作り直す必要はない。グラフの寸法合わせと、
+// 幅に合わせて敷き詰めるワードクラウドの再描画だけ行う。
 let _resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => { if (state.data && state.data.total) render(); }, 300);
+  _resizeTimer = setTimeout(() => {
+    if (!state.data || !state.data.total) return;
+    Object.values(chartRegistry).forEach(c => { if (!c.isDisposed()) c.resize(); });
+    drawWordCloud(state.data.feature_cloud);
+  }, 300);
 });
 
 document.addEventListener('DOMContentLoaded', () => {
