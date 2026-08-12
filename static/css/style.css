@@ -656,6 +656,26 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== Charts ===== */
 .chart { height: 320px; width: 100%; }
+
+/* グラフ描画前(echarts は約1MB、回線が細いと数秒かかる)の骨組み。
+   echarts が canvas を挿すと :empty でなくなり自動的に消える。
+   データ無しで描画しない場合は .chart-empty を入れるので出しっぱなしにならない。 */
+.chart:empty {
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--bg-alt) 30%, #F6F4EF 50%, var(--bg-alt) 70%);
+  background-size: 220% 100%;
+  animation: chart-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes chart-skeleton {
+  from { background-position: 220% 0; }
+  to { background-position: -220% 0; }
+}
+
+/* 動きを減らす設定では点滅させず、静かな下地だけ残す */
+@media (prefers-reduced-motion: reduce) {
+  .chart:empty { animation: none; background: var(--bg-alt); }
+}
 .chart-empty {
   display: flex; align-items: center; justify-content: center;
   height: 320px; color: var(--text-muted); font-size: 13px; text-align: center;

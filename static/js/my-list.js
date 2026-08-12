@@ -22,9 +22,15 @@ function initChart(el) {
   // render() が innerHTML を作り直すと旧インスタンスは孤立するので破棄しておく
   const prev = chartRegistry[el.id];
   if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
+  el.querySelector(':scope > .chart-empty')?.remove();   // 前回の「データなし」を消してから描く
   const c = echarts.getInstanceByDom(el) || echarts.init(el);
   chartRegistry[el.id] = c;
   return c;
+}
+
+// 描画しない時は骨組み(.chart:empty)が回り続けるので、必ず中身を入れて止める
+function chartEmpty(el, msg) {
+  if (el) el.innerHTML = `<div class="chart-empty">${msg || 'データがありません'}</div>`;
 }
 
 // canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
@@ -187,7 +193,8 @@ function wordCloudHtml(d) {
 
 function drawWordCloud(cloud) {
   const el = document.getElementById('chart-wordcloud');
-  if (!el || !cloud || !cloud.length) return;
+  if (!el) return;
+  if (!cloud || !cloud.length) { chartEmpty(el, '特徴データがありません'); return; }
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
   // canvas 描画は読み上げ不能なので、頻度順のテキストを代替として持たせる
@@ -483,7 +490,12 @@ function reportHtml(l, region) {
 }
 
 function drawReportCharts(l, region, prefs) {
-  if (!l || l.total_score == null) return;
+  if (!l || l.total_score == null) {
+    // スコア未計算でも枠は出ているので、骨組みを止めて理由を出す
+    ['chart-radar-single', 'chart-initcost', 'chart-compare-bar', 'chart-price-history']
+      .forEach(id => chartEmpty(document.getElementById(id), 'スコア未計算です'));
+    return;
+  }
   const rEl = document.getElementById('chart-radar-single');
   if (rEl) {
     const DIMS = [
@@ -558,6 +570,8 @@ function drawReportCharts(l, region, prefs) {
         label: { show: true, formatter: p => p.value.toLocaleString() + '円', fontFamily: CHART_FONT, fontSize: 12 },
       }],
     });
+  } else {
+    chartEmpty(bEl, 'エリア平均が取得できていません');
   }
   // 价格推移折线
   const hEl = document.getElementById('chart-price-history');
@@ -658,7 +672,8 @@ function poolHtml(pool, d) {
 
 function drawLayoutPie(dist) {
   const el = document.getElementById('chart-layout');
-  if (!el || !dist || !dist.length) return;
+  if (!el) return;
+  if (!dist || !dist.length) { chartEmpty(el, '間取りデータがありません'); return; }
   const tot = dist.reduce((s, x) => s + x.value, 0);
   chartA11y(el, `物件プールの間取り分布(円グラフ)。全${tot}件。` +
     dist.map(x => `${x.name}${x.value}件`).join('、') + '。');
@@ -677,7 +692,8 @@ function drawLayoutPie(dist) {
 
 function drawScatter(scatter) {
   const el = document.getElementById('chart-scatter');
-  if (!el || !scatter || !scatter.length) return;
+  if (!el) return;
+  if (!scatter || !scatter.length) { chartEmpty(el, '散布図のデータがありません'); return; }
   const pts = scatter.filter(p => p.x && p.y);
   chartA11y(el, `コスパ散布図。横軸が面積、縦軸が月額で、${pts.length}件を表示。` +
     pts.map(p => `${p.name}は${p.x}㎡ ${yen(p.y)}`).join('、') + '。');

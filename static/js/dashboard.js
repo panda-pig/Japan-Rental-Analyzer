@@ -26,6 +26,7 @@ const chartRegistry = {};
 function initChart(el) {
   const prev = chartRegistry[el.id];
   if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
+  el.querySelector(':scope > .chart-empty')?.remove();   // 前回の「データなし」を消してから描く
   const c = echarts.getInstanceByDom(el) || echarts.init(el);
   chartRegistry[el.id] = c;
   return c;
@@ -52,8 +53,14 @@ const TABLE_HINT = '数値の詳細はページ下部の「全エリア一覧」
 
 const isNarrow = () => window.innerWidth <= 600;
 
+// 描画しない時は骨組み(.chart:empty)が回り続けるので、必ず中身を入れて止める
+function chartEmpty(el, msg) {
+  if (el) el.innerHTML = `<div class="chart-empty">${msg || 'データがありません'}</div>`;
+}
+
 function bar(id, data) {
-  const el = document.getElementById(id); if (!el || !data || !data.length) return;
+  const el = document.getElementById(id); if (!el) return;
+  if (!data || !data.length) { chartEmpty(el); return; }
   const sorted = [...data].sort((a, b) => b.value - a.value);
   const hi = sorted[0], lo = sorted[sorted.length - 1];
   chartA11y(el, `相場ランキングの棒グラフ。${data.length}エリア。` +
@@ -90,7 +97,7 @@ function bar(id, data) {
 function valueMap() {
   const el = document.getElementById('chart-value-map'); if (!el) return;
   const rented = regionData.filter(r => r.avg_rent);
-  if (!rented.length) return;
+  if (!rented.length) { chartEmpty(el); return; }
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
   // 「安くて評価が高い」= 割安度の高い順に上位3件を代替テキストにする
@@ -151,7 +158,7 @@ function renderRegionRadar() {
       itemStyle: { color: CHART.palette[i % CHART.palette.length] },
     });
   }
-  if (!series.length) return;
+  if (!series.length) { chartEmpty(document.getElementById('chart-region-radar'), 'エリアを選択してください'); return; }
   const dims = ['安全性', '便利度', '環境', '相場の高さ'];
   radar('chart-region-radar',
     dims.map(name => ({ name, max: 100 })),
