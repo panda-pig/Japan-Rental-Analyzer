@@ -41,6 +41,19 @@ function chartA11y(el, label) {
 }
 const yen = v => (v || 0).toLocaleString() + '円';
 
+// スクレイプ由来の文字列(物件名・エリア・駅名など)はそのまま innerHTML に入れない。
+// 物件ページ側の細工でスクリプトが混入しうるため、必ず esc() を通す。
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
+
+// href に入れてよいのは http(s) のみ (javascript: を弾く)
+function safeUrl(u) {
+  try {
+    const p = new URL(u, location.origin);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
+  } catch (e) { return ''; }
+}
+
 // ---------- URL导入 ----------
 // #import-result は aria-live 領域。エラー時は入力欄に aria-invalid を立て、
 // スクリーンリーダーが結果を読み上げられるようにする。
@@ -49,7 +62,7 @@ function setImportMsg(text, kind) {
   const input = document.getElementById('import-url');
   const color = kind === 'error' ? 'var(--bad)' : kind === 'ok' ? 'var(--good)' : 'var(--text-muted)';
   const weight = kind === 'ok' ? 'font-weight:600;' : '';
-  el.innerHTML = `<span style="color:${color};${weight}">${text}</span>`;
+  el.innerHTML = `<span style="color:${color};${weight}">${esc(text)}</span>`;
   if (input) {
     if (kind === 'error') input.setAttribute('aria-invalid', 'true');
     else input.removeAttribute('aria-invalid');
@@ -249,7 +262,7 @@ function drawWordCloud(cloud) {
   // 降级:HTML 标签云
   const size = v => max === min ? 26 : Math.round(16 + (v - min) / (max - min) * 32);
   const chips = cloud.map((c, i2) =>
-    `<span title="${c.name}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${COLORS.palette[i2 % COLORS.palette.length]};line-height:1.1;white-space:nowrap;">${c.name}</span>`).join('');
+    `<span title="${esc(c.name)}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${COLORS.palette[i2 % COLORS.palette.length]};line-height:1.1;white-space:nowrap;">${esc(c.name)}</span>`).join('');
   el.style.height = 'auto';
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 20px;padding:24px 8px;min-height:180px;">${chips}</div>`;
 }
@@ -377,14 +390,14 @@ function reportHtml(l, region) {
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
-      ${isFav ? '★ ' + l.fav_status : '☆ 気になる'}</button>`;
+      ${isFav ? '★ ' + esc(l.fav_status) : '☆ 気になる'}</button>`;
 
   // 详细数据(2列),已在指标卡展示的不重复
   const detailRows = [
     ['家賃', yen(l.rent)], ['管理費', yen(l.management_fee)],
-    ['間取り', l.layout || '-'], ['階数', l.floor ? `${l.floor}階${l.total_floors ? ' / ' + l.total_floors + '階建' : ''}` : '-'],
-    ['築年数', `築${l.building_age ?? '?'}年`], ['構造', l.structure || '-'],
-    ['最寄駅', `${l.nearest_station || '-'} 徒歩${l.walk_minutes ?? '?'}分`],
+    ['間取り', esc(l.layout || '-')], ['階数', l.floor ? `${l.floor}階${l.total_floors ? ' / ' + l.total_floors + '階建' : ''}` : '-'],
+    ['築年数', `築${l.building_age ?? '?'}年`], ['構造', esc(l.structure || '-')],
+    ['最寄駅', `${esc(l.nearest_station || '-')} 徒歩${l.walk_minutes ?? '?'}分`],
     ['敷金 / 礼金', `${yen(l.deposit)} / ${yen(l.key_money)}`],
   ];
 
@@ -392,14 +405,14 @@ function reportHtml(l, region) {
     <div class="card" style="margin-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-          <h2 style="margin-bottom:4px;">${l.title || '物件レポート'} <span class="badge platform ${platformCls(l.platform)}">${l.platform || '-'}</span></h2>
+          <h2 style="margin-bottom:4px;">${esc(l.title || '物件レポート')} <span class="badge platform ${platformCls(l.platform)}">${esc(l.platform || '-')}</span></h2>
           <p style="font-size:13px;color:var(--text-secondary);margin:0;">
-            ${l.ward || '地域不明'}${l.region_avg_rent ? ` ・ エリア平均と比較` : ' ・ エリア基準データなし'}
+            ${esc(l.ward || '地域不明')}${l.region_avg_rent ? ` ・ エリア平均と比較` : ' ・ エリア基準データなし'}
           </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           ${favBtn}
-          ${l.detail_url ? `<a class="btn btn-outline" href="${l.detail_url}" target="_blank" rel="noopener">原平台で見る</a>` : ''}
+          ${safeUrl(l.detail_url) ? `<a class="btn btn-outline" href="${esc(safeUrl(l.detail_url))}" target="_blank" rel="noopener">原平台で見る</a>` : ''}
           ${l.detail_url ? `<button class="btn btn-outline" id="report-refresh" data-id="${l.id}">価格を再取得</button>` : ''}
           <button class="btn btn-ghost btn-sm" id="report-delete" data-id="${l.id}">削除</button>
         </div>
@@ -633,18 +646,18 @@ function poolHtml(pool, d) {
     const devHtml = dev == null ? '-' :
       `<span class="dev-badge ${dev > 0 ? 'pricey' : 'cheap'}">${dev > 0 ? '+' : ''}${Math.round(dev * 100)}%</span>`;
     const sel = l.id === state.selectedId ? ' style="background:var(--accent-bg,#EFF4FF);"' : '';
-    const favMark = l.fav_status ? `<span class="fav-star" title="${l.fav_status}">★</span>` : '';
-    const title = l.title || '(名称未設定)';
+    const favMark = l.fav_status ? `<span class="fav-star" title="${esc(l.fav_status)}">★</span>` : '';
+    const title = esc(l.title || '(名称未設定)');
     return `<tr data-id="${l.id}" class="pool-row"${sel} tabindex="0" role="button" aria-label="${title} のレポートを表示">
       <td><input type="checkbox" class="pool-check" data-id="${l.id}" aria-label="${title} を比較に追加"></td>
       <td><span class="${badgeCls(l.total_score)}">${l.total_score ?? '-'}</span></td>
-      <td style="font-weight:600;color:var(--text-primary);">${l.title || ''} ${favMark}</td>
-      <td>${l.ward || '-'}</td>
+      <td style="font-weight:600;color:var(--text-primary);">${esc(l.title || '')} ${favMark}</td>
+      <td>${esc(l.ward || '-')}</td>
       <td>${(l.total_monthly_cost || 0).toLocaleString()}円</td>
       <td>${l.area_m2 || '?'}㎡</td>
       <td>${devHtml}</td>
       <td><button class="link-btn pool-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">${l.fav_status ? '解除' : '気になる'}</button></td>
-      <td>${l.detail_url ? `<a href="${l.detail_url}" target="_blank" rel="noopener" aria-label="${title} を元サイトで開く" title="元サイトで開く" style="color:var(--accent);">→</a>` : ''}</td>
+      <td>${safeUrl(l.detail_url) ? `<a href="${esc(safeUrl(l.detail_url))}" target="_blank" rel="noopener" aria-label="${title} を元サイトで開く" title="元サイトで開く" style="color:var(--accent);">→</a>` : ''}</td>
     </tr>`;
   }).join('');
 

@@ -1,3 +1,13 @@
+// スクレイプ由来の文字列は innerHTML に直接入れない
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
+function safeUrl(u) {
+  try {
+    const p = new URL(u, location.origin);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
+  } catch (e) { return ''; }
+}
+
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const PALETTE = ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0'];
 const RADAR_DIMS = [
@@ -70,20 +80,28 @@ async function load() {
     ["築年数", "building_age"], ["ペット", "pet_allowed"], ["敷金", "deposit"],
     ["礼金", "key_money"], ["プラットフォーム", "platform"], ["通勤(分)", "commute_minutes"],
   ];
-  let html = '<table style="width:100%;"><thead><tr><th>項目</th>' + data.map(l => `<th>${l.title}</th>`).join("") + '</tr></thead><tbody>';
+  let html = '<table style="width:100%;"><thead><tr><th>項目</th>' + data.map(l => `<th>${esc(l.title)}</th>`).join("") + '</tr></thead><tbody>';
   for (const [label, key] of rows) {
     html += `<tr><td style="font-weight:600;color:var(--text-primary);">${label}</td>` + data.map(l => {
-      let v = l[key];
+      const v = l[key];
+      // cell は完成した HTML。素の値(間取り・駅名・プラットフォーム等)は必ず esc() を通す。
+      let cell;
       if (["total_monthly_cost", "rent", "management_fee", "initial_cost_estimate", "deposit", "key_money"].includes(key))
-        v = (v || 0).toLocaleString() + '円';
-      if (key === "total_score" && v != null) v = `<span class="badge score${v >= 75 ? '' : v >= 60 ? ' mid' : ' low'}">${v}</span>`;
-      if (key === "pet_allowed") v = v ? '<span class="tag good">可</span>' : '<span class="tag muted">不可</span>';
-      if (key === "commute_minutes" && !l.commute_resolved) v = '<span class="tag muted">未取得</span>';
-      if (key === "platform" && v) v = `<span class="badge platform">${v}</span>`;
-      return `<td>${v ?? '-'}</td>`;
+        cell = esc((v || 0).toLocaleString() + '円');
+      else if (key === "total_score" && v != null)
+        cell = `<span class="badge score${v >= 75 ? '' : v >= 60 ? ' mid' : ' low'}">${esc(v)}</span>`;
+      else if (key === "pet_allowed")
+        cell = v ? '<span class="tag good">可</span>' : '<span class="tag muted">不可</span>';
+      else if (key === "commute_minutes" && !l.commute_resolved)
+        cell = '<span class="tag muted">未取得</span>';
+      else if (key === "platform" && v)
+        cell = `<span class="badge platform">${esc(v)}</span>`;
+      else
+        cell = esc(v ?? '-');
+      return `<td>${cell}</td>`;
     }).join("") + "</tr>";
   }
-  html += `<tr><td style="font-weight:600;color:var(--text-primary);">原平台</td>` + data.map(l => `<td><a href="${l.detail_url}" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none;">詳細を見る</a></td>`).join("") + "</tr>";
+  html += `<tr><td style="font-weight:600;color:var(--text-primary);">原平台</td>` + data.map(l => `<td>${safeUrl(l.detail_url) ? `<a href="${esc(safeUrl(l.detail_url))}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none;">詳細を見る</a>` : '-'}</td>`).join("") + "</tr>";
   html += '</tbody></table>';
   el.innerHTML = '<div style="overflow-x:auto;">' + html + '</div>';
 }

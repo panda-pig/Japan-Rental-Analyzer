@@ -73,6 +73,62 @@ ASSET_V = _asset_stamp()
 app.jinja_env.globals["asset_v"] = ASSET_V
 
 
+# ===== 破壊的・設定変更系エンドポイントの保護 =====
+# 公開デプロイでは誰でも物件プールを空にしたり設定を書き換えられる状態だった。
+# ADMIN_TOKEN を設定した環境でのみ要求する(未設定ならローカル開発として素通し)。
+# 閲覧・URL解析・お気に入りは demo として開けたままにする。
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
+_PROTECTED = (
+    ("POST", "/api/pool/clear"),
+    ("POST", "/api/import/csv"),
+    ("POST", "/api/scrape"),
+    ("POST", "/api/scores/recalculate"),
+    ("PUT", "/api/preferences"),
+)
+
+
+def _needs_admin():
+    p, m = request.path, request.method
+    if (m, p) in _PROTECTED:
+        return True
+    if m == "DELETE" and p.startswith("/api/listings/"):
+        return True
+    if p.startswith("/api/sources") and m in ("POST", "PUT", "DELETE"):
+        return True
+    return False
+
+
+@app.before_request
+def _guard_admin():
+    if not ADMIN_TOKEN or not _needs_admin():
+        return None
+    import hmac
+    sent = request.headers.get("X-Admin-Token", "")
+    if hmac.compare_digest(sent, ADMIN_TOKEN):
+        return None
+    return jsonify({"error": "この操作には管理トークンが必要です。"}), 401
+
+
+def _detail_parser(url):
+    """許可ドメインを厳密に判定して解析器を返す。未対応なら None。"""
+    from scrapers.base import allowed_domain
+    domain = allowed_domain(url)
+    if domain == "suumo.jp":
+        from scrapers.suumo_detail import parse_suumo_detail
+        return parse_suumo_detail
+    if domain == "homes.co.jp":
+        from scrapers.homes_detail import parse_homes_detail
+        return parse_homes_detail
+    if domain == "athome.jp":
+        from scrapers.athome_detail import parse_athome_detail
+        return parse_athome_detail
+    if domain == "yahoo.co.jp":
+        from scrapers.yahoo_detail import parse_yahoo_detail
+        return parse_yahoo_detail
+    return None
+
+
 def _score_single(listing_id):
     """只给一条房源评分(避免全量重算超时)。"""
     import sqlite3
@@ -634,20 +690,9 @@ def api_import_detail():
     if not url:
         return jsonify({"error": "URL is required"}), 400
 
-    # 根据 URL 判断平台和解析器
-    if "suumo.jp" in url:
-        from scrapers.suumo_detail import parse_suumo_detail
-        parser = parse_suumo_detail
-    elif "homes.co.jp" in url:
-        from scrapers.homes_detail import parse_homes_detail
-        parser = parse_homes_detail
-    elif "athome.jp" in url:
-        from scrapers.athome_detail import parse_athome_detail
-        parser = parse_athome_detail
-    elif "yahoo.co.jp" in url or "realestate.yahoo.co.jp" in url:
-        from scrapers.yahoo_detail import parse_yahoo_detail
-        parser = parse_yahoo_detail
-    else:
+    # 根据 URL 判断平台和解析器(ホスト名を厳密に照合)
+    parser = _detail_parser(url)
+    if parser is None:
         return jsonify({"error": "サポートされていないURLです。SUUMO/HOMES/athome/Yahoo!不動産の物件詳細URLを入力してください。"}), 400
 
     html = fetch_html(url)
@@ -705,20 +750,9 @@ def api_listing_refresh(lid):
     if html is None:
         return jsonify({"error": "ページの取得に失敗しました"}), 500
 
-    # 根据URL选择解析器
-    if "suumo.jp" in url:
-        from scrapers.suumo_detail import parse_suumo_detail
-        parser = parse_suumo_detail
-    elif "homes.co.jp" in url:
-        from scrapers.homes_detail import parse_homes_detail
-        parser = parse_homes_detail
-    elif "athome.jp" in url:
-        from scrapers.athome_detail import parse_athome_detail
-        parser = parse_athome_detail
-    elif "yahoo.co.jp" in url:
-        from scrapers.yahoo_detail import parse_yahoo_detail
-        parser = parse_yahoo_detail
-    else:
+    # 根据URL选择解析器(ホスト名を厳密に照合)
+    parser = _detail_parser(url)
+    if parser is None:
         return jsonify({"error": "サポートされていないURL"}), 400
 
     try:

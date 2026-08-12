@@ -1,3 +1,13 @@
+// スクレイプ由来の文字列は innerHTML に直接入れない
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
+function safeUrl(u) {
+  try {
+    const p = new URL(u, location.origin);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
+  } catch (e) { return ''; }
+}
+
 const STATUSES = ["気になる", "問い合わせ予定", "問い合わせ済み", "内見予定", "内見済み", "申込候補", "申込済み", "見送り", "成約不可"];
 const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
 const STATUS_CLASS = {
@@ -38,10 +48,10 @@ async function load() {
     return `
     <div class="card listing-card">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <h3 style="margin:0;">${s.title || "(名称不明)"}</h3>
+        <h3 style="margin:0;">${esc(s.title || "(名称不明)")}</h3>
         ${s.total_score != null ? `<span class="badge score${s.total_score >= 75 ? '' : s.total_score >= 60 ? ' mid' : ' low'}">${s.total_score}</span>` : ""}
       </div>
-      <p class="location">${s.ward || "エリア不明"} ・ ${(s.total_monthly_cost || 0).toLocaleString()}円${s.area_m2 ? ` ・ ${s.area_m2}㎡` : ""}${s.layout ? ` ・ ${s.layout}` : ""}</p>
+      <p class="location">${esc(s.ward || "エリア不明")} ・ ${(s.total_monthly_cost || 0).toLocaleString()}円${s.area_m2 ? ` ・ ${s.area_m2}㎡` : ""}${s.layout ? ` ・ ${esc(s.layout)}` : ""}</p>
       <div class="tags"><span class="tag ${cls}">${s.status || "未設定"}</span></div>
       <label style="font-size:11px;color:var(--text-muted);">ステータス</label>
       <select onchange="updateField(${s.id}, 'status', this.value)" style="width:100%;">
@@ -55,7 +65,7 @@ async function load() {
       <input type="text" placeholder="駅近い / 要確認 など" value="${(s.memo || "").replace(/"/g, "&quot;")}" onblur="updateField(${s.id}, 'memo', this.value)" style="width:100%;">
       <div class="actions">
         <button class="btn btn-ghost btn-sm" onclick="removeFav(${s.id})">削除</button>
-        ${s.detail_url ? `<a class="btn btn-primary btn-sm" href="${s.detail_url}" target="_blank" rel="noopener">原平台で見る</a>` : ""}
+        ${safeUrl(s.detail_url) ? `<a class="btn btn-primary btn-sm" href="${esc(safeUrl(s.detail_url))}" target="_blank" rel="noopener">原平台で見る</a>` : ""}
       </div>
     </div>`;
   }).join("");
