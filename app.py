@@ -19,6 +19,60 @@ if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
 _execute("DELETE FROM region_stats WHERE ward IS NULL AND city IS NULL")
 
 
+# ===== 転送量の最適化 =====
+# gunicorn は自動で gzip しない。JSON/CSS/JS はテキストなので圧縮がよく効く。
+_COMPRESSIBLE = ("application/json", "text/css", "application/javascript",
+                 "text/javascript", "text/html")
+_MIN_COMPRESS_BYTES = 1024
+
+
+@app.after_request
+def _compress(resp):
+    if resp.status_code >= 300:
+        return resp
+    if "gzip" not in request.headers.get("Accept-Encoding", "").lower():
+        return resp
+    if resp.headers.get("Content-Encoding"):
+        return resp
+    if not resp.mimetype or not resp.mimetype.startswith(_COMPRESSIBLE):
+        return resp
+    # 静的ファイルはファイルラッパのまま返るので、読み出すには passthrough を解く
+    resp.direct_passthrough = False
+    data = resp.get_data()
+    if len(data) < _MIN_COMPRESS_BYTES:
+        return resp
+    import gzip as _gzip
+    packed = _gzip.compress(data, 6)
+    if len(packed) >= len(data):      # 圧縮で増えるなら諦める
+        return resp
+    resp.set_data(packed)
+    resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Content-Length"] = str(len(packed))
+    resp.headers.add("Vary", "Accept-Encoding")
+    return resp
+
+
+# 静的ファイルは URL に mtime を載せて1年キャッシュさせる。
+# デプロイでファイルが変わればURLも変わるので、古いCSSが残ることはない。
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
+
+
+def _asset_stamp():
+    """static/ 配下で最も新しい mtime。デプロイで何か変われば値が変わる。"""
+    newest = 0
+    for root, _dirs, files in os.walk(app.static_folder):
+        for name in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, name)))
+            except OSError:
+                pass
+    return int(newest)
+
+
+ASSET_V = _asset_stamp()
+app.jinja_env.globals["asset_v"] = ASSET_V
+
+
 def _score_single(listing_id):
     """只给一条房源评分(避免全量重算超时)。"""
     import sqlite3
