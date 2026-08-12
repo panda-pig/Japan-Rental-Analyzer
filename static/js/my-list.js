@@ -570,7 +570,7 @@ function drawReportCharts(l, region, prefs) {
         hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
     initChart(hEl).setOption({
       ...BASE_OPT,
-      grid: { left: 60, right: 24, top: 20, bottom: 40 },
+      grid: { left: 60, right: 24, top: 34, bottom: 40 },   // 軸名が切れないよう上に余白
       xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
       yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
       series: [{
@@ -638,7 +638,7 @@ function poolHtml(pool, d) {
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:24px 24px 12px;flex-wrap:wrap;gap:12px;">
         <h2 style="margin:0;">物件プール (${pool.length}件)</h2>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <select id="pool-sort" class="select">${sortOptions}</select>
           <button class="btn btn-primary" id="pool-compare" disabled>選択して比較 (0)</button>
           <button class="btn btn-outline" id="pool-clear" title="物件プールを全て削除">プールをクリア</button>
@@ -690,7 +690,8 @@ function drawScatter(scatter) {
   initChart(el).setOption({
     ...BASE_OPT,
     tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.data.name}<br>${p.data.ward || ''}<br>面積 ${p.data.value[0]}㎡ / 月額 ${p.data.value[1].toLocaleString()}円` },
-    grid: { left: 60, right: 30, top: 20, bottom: 40 },
+    // top を軸名の nameGap より広く取らないと「月額(円)」が上端で切れる
+    grid: { left: 60, right: 30, top: 34, bottom: 40 },
     xAxis: { type: 'value', name: '面積(㎡)', axisLabel: { color: COLORS.muted } },
     yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
     series: [{

@@ -50,22 +50,40 @@ function chartA11y(el, label) {
 }
 const TABLE_HINT = '数値の詳細はページ下部の「全エリア一覧」の表を参照してください。';
 
+const isNarrow = () => window.innerWidth <= 600;
+
 function bar(id, data) {
   const el = document.getElementById(id); if (!el || !data || !data.length) return;
   const sorted = [...data].sort((a, b) => b.value - a.value);
   const hi = sorted[0], lo = sorted[sorted.length - 1];
   chartA11y(el, `相場ランキングの棒グラフ。${data.length}エリア。` +
     `最も高いのは${hi.name} ${man(hi.value)}円、最も安いのは${lo.name} ${man(lo.value)}円。${TABLE_HINT}`);
+
+  const bars = data.map(x => ({ value: x.value, itemStyle: { color: scoreColor(scoreByWard[x.name] ?? 50), borderRadius: [4, 4, 0, 0] } }));
+  const names = data.map(x => x.name);
+  const valueAxis = { type: 'value', splitLine: { lineStyle: { color: CHART.border } }, axisLabel: { color: CHART.textMuted, formatter: v => (v / 10000) + '万' } };
+  const tooltip = { trigger: 'axis', formatter: p => `${p[0].name}<br/>相場 ${p[0].value.toLocaleString()}円<br/>総合評価 ${scoreByWard[p[0].name] ?? '-'}` };
+  const narrow = isNarrow();
+
+  if (narrow) {
+    // 縦棒だと 23 区のラベルが半分しか描画されない。横棒にして全件読めるようにする。
+    el.style.height = (data.length * 19 + 50) + 'px';
+    initChart(el).setOption({
+      ...BASE_OPTION, tooltip,
+      grid: { top: 8, right: 16, bottom: 8, left: 8, containLabel: true },
+      xAxis: valueAxis,
+      yAxis: { type: 'category', data: names, inverse: true, axisLabel: { color: CHART.text, fontSize: 11 }, axisLine: { lineStyle: { color: CHART.border } } },
+      series: [{ type: 'bar', barMaxWidth: 13, data: bars.map(b => ({ ...b, itemStyle: { ...b.itemStyle, borderRadius: [0, 4, 4, 0] } })) }],
+    });
+    return;
+  }
+  el.style.height = '';
   initChart(el).setOption({
-    ...BASE_OPTION,
-    grid: { top: 16, right: 16, bottom: 70, left: 40, containLabel: true },
-    xAxis: { type: 'category', data: data.map(x => x.name), axisLabel: { color: CHART.text, fontSize: 10, rotate: 45 }, axisLine: { lineStyle: { color: CHART.border } } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: CHART.border } }, axisLabel: { color: CHART.textMuted, formatter: v => (v / 10000) + '万' } },
-    series: [{
-      type: 'bar', barMaxWidth: 26,
-      data: data.map(x => ({ value: x.value, itemStyle: { color: scoreColor(scoreByWard[x.name] ?? 50), borderRadius: [4, 4, 0, 0] } })),
-    }],
-    tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>相場 ${p[0].value.toLocaleString()}円<br/>総合評価 ${scoreByWard[p[0].name] ?? '-'}` },
+    ...BASE_OPTION, tooltip,
+    grid: { top: 16, right: 16, bottom: 8, left: 40, containLabel: true },
+    xAxis: { type: 'category', data: names, axisLabel: { color: CHART.text, fontSize: 10, rotate: 45 }, axisLine: { lineStyle: { color: CHART.border } } },
+    yAxis: valueAxis,
+    series: [{ type: 'bar', barMaxWidth: 26, data: bars }],
   });
 }
 
@@ -201,8 +219,19 @@ function metricCard(num, label, cls, sub) {
   return `<div class="metric ${cls || ''}"><div class="num">${num}</div><div class="label">${label}</div>${sub ? `<div class="label" style="color:var(--text-secondary);margin-top:2px;">${sub}</div>` : ''}</div>`;
 }
 
+// 取得済みデータからグラフだけ描き直す (縦棒⇄横棒の切替に使う。再取得はしない)
+let dashData = null;
+function renderCharts() {
+  if (!dashData) return;
+  valueMap();
+  bar('chart-tokyo-rent', dashData.tokyo_region_rent);
+  bar('chart-yokohama-rent', dashData.yokohama_region_rent);
+  renderRegionRadar();
+}
+
 async function load() {
   const d = await (await fetch('/api/dashboard')).json();
+  dashData = d;
   regionData = d.regions || [];
   scoreByWard = {};
   regionData.forEach(r => { scoreByWard[regionName(r)] = r.overall_score; });
@@ -215,17 +244,15 @@ async function load() {
     metricCard(s.best_value ? s.best_value.ward : '-', '狙い目エリア', '', s.best_value ? `評価${s.best_value.score} / ${man(s.best_value.rent)}` : ''),
   ].join('');
 
-  valueMap();
-  bar('chart-tokyo-rent', d.tokyo_region_rent);
-  bar('chart-yokohama-rent', d.yokohama_region_rent);
-
+  // レーダーはセレクタの値を読むので、先に選択肢を用意してから描画する
   const opts = '<option value="">エリアを選択...</option>' +
     regionData.map(r => `<option value="${regionName(r)}">${regionName(r)}</option>`).join('');
   document.getElementById('region-selector-1').innerHTML = opts;
   document.getElementById('region-selector-2').innerHTML = opts;
   if (regionData.length > 0) document.getElementById('region-selector-1').value = regionName(regionData[0]);
   if (regionData.length > 5) document.getElementById('region-selector-2').value = regionName(regionData[5]);
-  renderRegionRadar();
+
+  renderCharts();
 
   renderTable();
   document.querySelectorAll('#region-table th[data-sort]').forEach(th => {
@@ -248,9 +275,13 @@ async function load() {
 
 // リサイズでデータを取り直す必要はない。既存グラフの寸法だけ合わせる。
 let _rz;
+let _wasNarrow = isNarrow();
 window.addEventListener('resize', () => {
   clearTimeout(_rz);
   _rz = setTimeout(() => {
+    // ブレークポイントをまたいだ時だけ組み替える (それ以外は寸法合わせのみ)
+    const now = isNarrow();
+    if (now !== _wasNarrow) { _wasNarrow = now; renderCharts(); return; }
     Object.values(chartRegistry).forEach(c => { if (!c.isDisposed()) c.resize(); });
   }, 200);
 });

@@ -733,6 +733,23 @@ select:focus, input:focus {
 }
 
 /* ===== タップ領域 — 狭い画面 / タッチ端末で指で押せる最小サイズを確保 ===== */
+/* 表は横スクロールできるのに列が潰れ、「エ/リ/ア」と1文字ずつ折り返していた。
+   見出しと短い列は折り返さず、物件名だけ通常の折り返しにする。 */
+@media (max-width: 768px) {
+  #pool-table th,
+  #region-table th,
+  #pool-table td { white-space: nowrap; }
+  #pool-table td:nth-child(3) { white-space: normal; min-width: 140px; }
+}
+
+/* 375px 幅で「設定」が画面外に隠れていた。5タブが収まるように詰める。
+   (縦の 44px タップ領域は下のブロックで維持) */
+@media (max-width: 400px) {
+  .nav { padding: 0 10px; gap: 0; }
+  .nav-brand { margin-right: 8px; }
+  .nav a.nav-link { padding: 6px 7px; }
+}
+
 @media (max-width: 768px), (pointer: coarse) {
   .btn,
   .nav a.nav-link,
