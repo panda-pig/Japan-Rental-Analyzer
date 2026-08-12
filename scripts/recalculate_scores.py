@@ -41,7 +41,8 @@ def recalculate():
             min_floor=pref["min_floor"], max_walk=pref["max_walk_minutes"],
             max_age=pref["max_building_age"],
             broker_rate=pref["broker_fee_rate"], prepaid=pref["prepaid_rent_months"],
-            misc=pref["misc_cost"], commute_minutes=commute_minutes)
+            misc=pref["misc_cost"], commute_minutes=commute_minutes,
+            min_area=pref["min_area_m2"])
         conn.execute("DELETE FROM listing_scores WHERE listing_id=?", (l["id"],))
         conn.execute("""INSERT INTO listing_scores
             (listing_id, budget_score, area_score, commute_score, floor_score,

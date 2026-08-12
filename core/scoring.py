@@ -13,6 +13,15 @@ class Weights:
     initial_cost: int = 5
 
 
+# 各次元の満点。「その物件がその軸でどれだけ良いか」の尺度であり、重みとは独立。
+# 総合点は (各次元の達成率 × 重み) の加重平均なので、重みを変えても 0〜100 に収まる。
+# 既定の重みがたまたまこの満点と同じ値なので、既定設定では従来の点数と一致する。
+DIM_MAX = {
+    "budget": 20, "area": 15, "commute": 15, "floor": 10,
+    "pet": 15, "station": 10, "age": 10, "initial_cost": 5,
+}
+
+
 @dataclass
 class ScoreInput:
     total_monthly_cost: int
@@ -69,9 +78,7 @@ def _area_score(area, ideal, minimum=35):
 def _floor_score(floor, min_floor):
     if floor is None:
         return 3
-    if floor >= 2:
-        return 10
-    return 0
+    return 10 if floor >= (min_floor or 2) else 0
 
 
 def _pet_score(pet):
@@ -83,29 +90,33 @@ def _pet_score(pet):
 
 
 def _station_score(walk, max_walk):
+    """許容徒歩分を基準に段階評価。既定(15分)では 5/10/15/20分 の従来の区切りと一致する。"""
     if walk is None:
         return 3
-    if walk <= 5:
+    limit = max_walk or 15
+    if walk <= limit / 3:
         return 10
-    if walk <= 10:
+    if walk <= limit * 2 / 3:
         return 8
-    if walk <= 15:
+    if walk <= limit:
         return 5
-    if walk <= 20:
+    if walk <= limit * 4 / 3:
         return 2
     return 0
 
 
 def _age_score(age, max_age):
+    """許容築年数を基準に段階評価。既定(20年)では 5/10/20/30年 の従来の区切りと一致する。"""
     if age is None:
         return 3
-    if age <= 5:
+    limit = max_age or 20
+    if age <= limit / 4:
         return 10
-    if age <= 10:
+    if age <= limit / 2:
         return 8
-    if age <= 20:
+    if age <= limit:
         return 5
-    if age <= 30:
+    if age <= limit * 1.5:
         return 2
     return 0
 
@@ -143,9 +154,9 @@ def _commute_score(minutes):
 
 def calculate_scores(inp: ScoreInput, w: Weights, max_cost, ideal_area,
                      min_floor, max_walk, max_age, broker_rate, prepaid, misc,
-                     commute_minutes=None) -> ScoreResult:
+                     commute_minutes=None, min_area=35) -> ScoreResult:
     bs = _budget_score(inp.total_monthly_cost, max_cost)
-    as_ = _area_score(inp.area_m2, ideal_area)
+    as_ = _area_score(inp.area_m2, ideal_area, min_area or 35)
     fs = _floor_score(inp.floor, min_floor)
     ps = _pet_score(inp.pet_allowed)
     ss = _station_score(inp.walk_minutes, max_walk)
@@ -155,14 +166,24 @@ def calculate_scores(inp: ScoreInput, w: Weights, max_cost, ideal_area,
     commute_resolved = 1 if cs is not None else 0
     cs_val = cs if cs is not None else 0
 
-    # 各维度得分已是 0~weight 刻度,直接求和后按权重总和归一化到 0~100
-    weight_sum = (w.budget + w.area + w.floor + w.pet + w.station +
-                  w.age + w.initial_cost)
-    score_sum = bs + as_ + fs + ps + ss + ags + ics
+    # 各次元の達成率(得点/満点, 0〜1)を重みで加重平均して 0〜100 にする。
+    # 以前は得点をそのまま足して重み合計で割っていたため、重みは分母にしか効かず、
+    # 既定以外の重みでは 100 を超えたり、重みを上げた軸ほど点が下がったりしていた。
+    parts = [
+        ("budget", bs, w.budget), ("area", as_, w.area), ("floor", fs, w.floor),
+        ("pet", ps, w.pet), ("station", ss, w.station), ("age", ags, w.age),
+        ("initial_cost", ics, w.initial_cost),
+    ]
     if commute_resolved:
-        weight_sum += w.commute
-        score_sum += cs_val
-    total = int(score_sum / weight_sum * 100) if weight_sum else 0
+        parts.append(("commute", cs_val, w.commute))
+
+    weight_sum = sum(max(wt or 0, 0) for _n, _s, wt in parts)
+    if weight_sum:
+        achieved = sum((s / DIM_MAX[n]) * max(wt or 0, 0) for n, s, wt in parts)
+        total = int(round(achieved / weight_sum * 100))
+    else:
+        total = 0
+    total = max(0, min(100, total))
 
     reasons = []
     if inp.total_monthly_cost and inp.total_monthly_cost <= max_cost:
