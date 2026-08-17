@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_PATH
 from core.scoring import calculate_scores, ScoreInput, Weights
 from core.commute import get_commute_minutes
+from core.initial_cost import estimate_initial_cost
 
 
 def recalculate():
@@ -24,6 +25,17 @@ def recalculate():
     )
     listings = conn.execute("SELECT * FROM rental_listings WHERE is_active=1").fetchall()
     for l in listings:
+        # 初期費用の係数を変えたら保存値も更新する。以前は保存値だけ古い係数のまま残り、
+        # レポートのグラフ(ユーザー係数)と指標カード・比較表(保存値)で金額が食い違っていた。
+        initial = estimate_initial_cost(
+            l["rent"], l["deposit"], l["key_money"],
+            broker_fee_rate=pref["broker_fee_rate"],
+            prepaid_rent_months=pref["prepaid_rent_months"],
+            misc_cost=pref["misc_cost"])
+        if initial is not None and initial != l["initial_cost_estimate"]:
+            conn.execute("UPDATE rental_listings SET initial_cost_estimate=? WHERE id=?",
+                         (initial, l["id"]))
+
         commute_minutes = None
         if pref["target_station"] and l["nearest_station"]:
             commute_minutes = get_commute_minutes(l["nearest_station"], pref["target_station"])

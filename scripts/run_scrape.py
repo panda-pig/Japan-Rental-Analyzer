@@ -25,8 +25,13 @@ PARSERS = {
 }
 
 
-def normalize(raw: RawListing):
-    """RawListing -> rental_listings 列 dict。"""
+def normalize(raw: RawListing, prefs=None):
+    """RawListing -> rental_listings 列 dict。
+
+    prefs を渡すと初期費用の係数(仲介手数料率/前家賃/雑費)にユーザー設定を使う。
+    渡さない場合は config の既定値。以前は常に既定値で保存していたため、
+    設定を変えるとレポートのグラフ(ユーザー係数)と保存値がずれていた。
+    """
     rent = parse_money(raw.rent_raw)
     mgmt = parse_money(raw.management_fee_raw) if raw.management_fee_raw else None
     total = (rent or 0) + (mgmt or 0) if rent else None
@@ -38,7 +43,14 @@ def normalize(raw: RawListing):
     walk = parse_walk_minutes(raw.walk_raw)
     addr = parse_address(raw.address_raw)
     feats = parse_features(raw.features_raw)
-    initial = estimate_initial_cost(rent, deposit, key_money)
+    if prefs:
+        initial = estimate_initial_cost(
+            rent, deposit, key_money,
+            broker_fee_rate=prefs["broker_fee_rate"],
+            prepaid_rent_months=prefs["prepaid_rent_months"],
+            misc_cost=prefs["misc_cost"])
+    else:
+        initial = estimate_initial_cost(rent, deposit, key_money)
     price_per_m2 = (total / area) if (total and area) else None
     h = generate_listing_hash(addr.get("address"), raw.title, raw.layout, area, floor, rent)
     return {

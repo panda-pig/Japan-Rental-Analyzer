@@ -110,6 +110,29 @@ def _guard_admin():
     return jsonify({"error": "この操作には管理トークンが必要です。"}), 401
 
 
+def _refresh_initial_costs():
+    """保存済みの初期費用を現在の係数で計算し直す(表示箇所ごとの食い違いを防ぐ)。"""
+    from core.initial_cost import estimate_initial_cost
+    from db_helper import get_conn
+    conn = get_conn()
+    pref = conn.execute("SELECT * FROM user_preferences WHERE id=1").fetchone()
+    if not pref:
+        conn.close()
+        return
+    for l in conn.execute("SELECT id, rent, deposit, key_money, initial_cost_estimate "
+                          "FROM rental_listings WHERE is_active=1").fetchall():
+        initial = estimate_initial_cost(
+            l["rent"], l["deposit"], l["key_money"],
+            broker_fee_rate=pref["broker_fee_rate"],
+            prepaid_rent_months=pref["prepaid_rent_months"],
+            misc_cost=pref["misc_cost"])
+        if initial is not None and initial != l["initial_cost_estimate"]:
+            conn.execute("UPDATE rental_listings SET initial_cost_estimate=? WHERE id=?",
+                         (initial, l["id"]))
+    conn.commit()
+    conn.close()
+
+
 def _detail_parser(url):
     """許可ドメインを厳密に判定して解析器を返す。未対応なら None。"""
     from scrapers.base import allowed_domain
@@ -570,10 +593,13 @@ def api_listing_detail(lid):
     if request.method == "DELETE":
         if not query_one("SELECT id FROM rental_listings WHERE id=?", (lid,)):
             return jsonify({"error": "not found"}), 404
-        execute("DELETE FROM listing_price_history WHERE listing_id=?", (lid,))
-        execute("DELETE FROM listing_status WHERE listing_id=?", (lid,))
-        execute("DELETE FROM listing_scores WHERE listing_id=?", (lid,))
-        execute("DELETE FROM rental_listings WHERE id=?", (lid,))
+        # 4テーブルを1トランザクションで消す(途中で失敗しても半端に残さない)
+        from db_helper import transaction
+        with transaction() as conn:
+            conn.execute("DELETE FROM listing_price_history WHERE listing_id=?", (lid,))
+            conn.execute("DELETE FROM listing_status WHERE listing_id=?", (lid,))
+            conn.execute("DELETE FROM listing_scores WHERE listing_id=?", (lid,))
+            conn.execute("DELETE FROM rental_listings WHERE id=?", (lid,))
         return jsonify({"ok": True})
     row = query_one("""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
         s.commute_minutes AS score_commute, st.status, st.memo, st.priority
@@ -661,11 +687,13 @@ def api_compare():
 @app.route("/api/pool/clear", methods=["POST"])
 def api_pool_clear():
     """物件プールを全てクリア(履歴的な一括抓取データのリセット用)。"""
+    from db_helper import transaction
     n = query_one("SELECT COUNT(*) AS c FROM rental_listings")["c"]
-    execute("DELETE FROM listing_price_history")
-    execute("DELETE FROM listing_status")
-    execute("DELETE FROM listing_scores")
-    execute("DELETE FROM rental_listings")
+    with transaction() as conn:
+        conn.execute("DELETE FROM listing_price_history")
+        conn.execute("DELETE FROM listing_status")
+        conn.execute("DELETE FROM listing_scores")
+        conn.execute("DELETE FROM rental_listings")
     return jsonify({"ok": True, "deleted": n})
 
 
@@ -707,7 +735,8 @@ def api_import_detail():
         return jsonify({"error": f"解析エラー: {str(e)}"}), 500
 
     conn = get_conn()
-    status, listing_id = upsert_listing(conn, normalize(raw))
+    prefs = query_one("SELECT * FROM user_preferences WHERE id=1")
+    status, listing_id = upsert_listing(conn, normalize(raw, prefs))
     conn.commit()
     conn.close()
 
@@ -761,11 +790,14 @@ def api_listing_refresh(lid):
         return jsonify({"error": f"解析エラー: {str(e)}"}), 500
 
     conn = get_conn()
-    status, _ = upsert_listing(conn, normalize(raw))
+    prefs = query_one("SELECT * FROM user_preferences WHERE id=1")
+    status, _ = upsert_listing(conn, normalize(raw, prefs))
     conn.commit()
     conn.close()
 
-    recalculate()
+    # 1件の再取得で全件を再計算していた。目標駅を設定していると
+    # 物件数ぶんの通勤時間APIまで叩くので、この物件だけ計算し直す。
+    _score_single(lid)
 
     # 检查价格是否变化
     new_listing = query_one("SELECT total_monthly_cost FROM rental_listings WHERE id=?", (lid,))
@@ -834,10 +866,18 @@ def api_preferences_update():
               "commute_weight", "floor_weight", "pet_weight", "station_weight",
               "age_weight", "initial_cost_weight", "broker_fee_rate",
               "prepaid_rent_months", "misc_cost"]
-    sets = ", ".join(f"{f}=?" for f in fields)
-    params = [data.get(f) for f in fields]
-    params.append("1")
-    execute(f"UPDATE user_preferences SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=?", params)
+    # 送られてきた項目だけ更新する。以前は data.get() で全項目を書いていたため、
+    # 画面が送らない項目 (require_pet_allowed / ideal_walk_minutes) が NULL で潰れていた。
+    present = [f for f in fields if f in data]
+    if present:
+        sets = ", ".join(f"{f}=?" for f in present)
+        params = [data[f] for f in present] + ["1"]
+        execute(f"UPDATE user_preferences SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=?", params)
+
+    # 初期費用の係数は純粋な計算なので、保存した時点で保存値も揃えておく
+    # (スコア再計算と違い外部APIを叩かない)。
+    if any(f in data for f in ("broker_fee_rate", "prepaid_rent_months", "misc_cost")):
+        _refresh_initial_costs()
     return jsonify({"ok": True})
 
 
