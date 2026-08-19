@@ -11,8 +11,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SCRAPE_SLEEP_SECONDS, SCRAPE_USER_AGENT
 
 # 取得を許可する不動産サイト。ホスト名の完全一致かサブドメインのみ通す。
-# 以前は URL 文字列に "suumo.jp" が含まれるかだけを見ていたため、
-# http://127.0.0.1/?x=suumo.jp のような URL でも取得しに行っていた。
 ALLOWED_DOMAINS = ("suumo.jp", "homes.co.jp", "athome.jp", "yahoo.co.jp")
 MAX_REDIRECTS = 5
 

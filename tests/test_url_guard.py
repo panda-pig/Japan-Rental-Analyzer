@@ -5,9 +5,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scrapers.base import allowed_domain
 
 
-# 以前は URL 文字列に "suumo.jp" 等が含まれるかだけを見ていたため、
-# 攻撃者が用意したホストや内部アドレスでも取得しに行ってしまっていた。
-
 def test_real_listing_hosts_are_allowed():
     for url, domain in [
         ("https://suumo.jp/chintai/jnc_000012345/", "suumo.jp"),

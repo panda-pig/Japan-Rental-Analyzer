@@ -13,29 +13,23 @@ def parse_suumo(html, source_url=""):
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for building in soup.select(".cassetteitem"):
-        # 楼级信息
         title_tag = building.select_one(".cassetteitem_content-title")
         if not title_tag:
             continue
         title = title_tag.get_text(strip=True)
 
-        # 地址
         addr_tag = building.select_one(".cassetteitem_detail-col1")
         address = addr_tag.get_text(strip=True) if addr_tag else None
 
-        # 车站/徒歩(取第一个)
         station_texts = building.select(".cassetteitem_detail-text")
         nearest_station = station_texts[0].get_text(strip=True) if station_texts else None
-        walk_raw = nearest_station  # "東急東横線/白楽駅 歩6分"
+        walk_raw = nearest_station
 
-        # 築年/阶建
         detail3 = building.select_one(".cassetteitem_detail-col3")
         age_floor_text = detail3.get_text(strip=True) if detail3 else ""
 
-        # 每个房间行
         room_rows = building.select("tbody tr")
         if not room_rows:
-            # 有些页面用 .cassetteitem_item
             room_rows = building.select(".cassetteitem_item")
         if not room_rows:
             continue
@@ -44,24 +38,18 @@ def parse_suumo(html, source_url=""):
             tds = tr.select("td")
             if len(tds) < 6:
                 continue
-            # td[2] = 楼层 (1階)
-            # td[3] = 賃料 + 管理費 (10.7万円4000円)
-            # td[4] = 敷金/礼金
-            # td[5] = 間取り/専有面積 (1LDK40.4m2)
             floor_raw = tds[2].get_text(strip=True) if len(tds) > 2 else None
             rent_fee_text = tds[3].get_text(strip=True) if len(tds) > 3 else ""
             deposit_key_text = tds[4].get_text(strip=True) if len(tds) > 4 else ""
             layout_area_text = tds[5].get_text(strip=True) if len(tds) > 5 else ""
 
-            # 详情链接
             detail_link = tr.select_one("a[href*='/chintai/']")
             if detail_link:
                 href = detail_link.get("href", "")
                 detail_url = href if href.startswith("http") else SUUMO_BASE + href
             else:
-                continue  # 没链接的行跳过
+                continue
 
-            # 用 class 精确提取各字段(真实 SUUMO 结构)
             rent_tag = tr.select_one(".cassetteitem_price--rent")
             fee_tag = tr.select_one(".cassetteitem_price--administration")
             dep_tag = tr.select_one(".cassetteitem_price--deposit")
@@ -76,13 +64,11 @@ def parse_suumo(html, source_url=""):
             layout = madori_tag.get_text(strip=True) if madori_tag else None
             area_raw = menseki_tag.get_text(strip=True) if menseki_tag else None
 
-            # "-" を 0 に
             if deposit_raw == "-":
                 deposit_raw = "0"
             if key_money_raw == "-":
                 key_money_raw = "0"
 
-            # 築年数从楼级信息提取
             age_raw = age_floor_text
 
             results.append(RawListing(

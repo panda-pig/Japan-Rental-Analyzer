@@ -10,9 +10,7 @@ def get_conn():
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     # schema.sql は外部キーを宣言しているが、SQLite は既定で強制しない。
-    # 有効にして、スコア等が存在しない物件を指したまま残らないようにする。
     conn.execute("PRAGMA foreign_keys = ON")
-    # 書き込みが競合したとき即エラーにせず待つ
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 

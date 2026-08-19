@@ -12,7 +12,6 @@ def parse_suumo_detail(html, detail_url=""):
     title_tag = soup.select_one("h1")
     title = title_tag.get_text(strip=True) if title_tag else ""
 
-    # 从 table 提取键值对(基本信息)
     tables = soup.select("table")
     kv = {}
     for t in tables:
@@ -22,7 +21,6 @@ def parse_suumo_detail(html, detail_url=""):
             if th and td:
                 kv[th.get_text(strip=True)] = td.get_text(strip=True)
 
-    # 賃料(管理費): "10.7万円(4000円)"
     rent_fee = kv.get("賃料(管理費)", "")
     rent_raw = ""
     management_fee_raw = None
@@ -34,7 +32,6 @@ def parse_suumo_detail(html, detail_url=""):
         if mm:
             management_fee_raw = mm.group(1)
 
-    # 敷金/礼金 在 .property_view_note-list 里(有多个,找含"敷金"的那个)
     deposit_raw = "0"
     key_money_raw = "0"
     for nl in soup.select(".property_view_note-list"):
@@ -49,21 +46,16 @@ def parse_suumo_detail(html, detail_url=""):
             key_money_raw = km.group(1) if km.group(1) != "-" else "0"
         break
 
-    # 階建: "1階/3階建"
     floor_raw = kv.get("階建", None)
 
-    # 築年数
     age_raw = kv.get("築年数", None)
 
-    # 所在地
     address_raw = kv.get("所在地", None)
 
-    # 駅徒歩(取第一个)
     walk_text = kv.get("駅徒歩", None)
     nearest_station = walk_text
     walk_raw = walk_text
 
-    # 間取り + 面積: 同一行有4列 th|td|th|td => 間取り|1LDK|専有面積|40.4m2
     layout = None
     area_raw = None
     for tr in soup.select("tr"):
@@ -72,15 +64,13 @@ def parse_suumo_detail(html, detail_url=""):
         if len(ths) >= 2 and len(tds) >= 2:
             th_texts = [th.get_text(strip=True) for th in ths]
             if th_texts[0] == "間取り" and th_texts[1] == "専有面積":
-                layout = tds[0].get_text(strip=True)      # "1LDK"
-                area_raw = tds[1].get_text(strip=True)    # "40.4m2"
+                layout = tds[0].get_text(strip=True)
+                area_raw = tds[1].get_text(strip=True)
                 break
 
-    # ペット(从条件中检测)
     condition = kv.get("条件", "")
     pet_text = condition if "ペット" in condition else ""
 
-    # 设备关键词
     features = []
     if "二人入居可" in condition:
         features.append("2人入居可")

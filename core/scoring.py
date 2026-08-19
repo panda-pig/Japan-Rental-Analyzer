@@ -14,8 +14,6 @@ class Weights:
 
 
 # 各次元の満点。「その物件がその軸でどれだけ良いか」の尺度であり、重みとは独立。
-# 総合点は (各次元の達成率 × 重み) の加重平均なので、重みを変えても 0〜100 に収まる。
-# 既定の重みがたまたまこの満点と同じ値なので、既定設定では従来の点数と一致する。
 DIM_MAX = {
     "budget": 20, "area": 15, "commute": 15, "floor": 10,
     "pet": 15, "station": 10, "age": 10, "initial_cost": 5,
@@ -166,9 +164,6 @@ def calculate_scores(inp: ScoreInput, w: Weights, max_cost, ideal_area,
     commute_resolved = 1 if cs is not None else 0
     cs_val = cs if cs is not None else 0
 
-    # 各次元の達成率(得点/満点, 0〜1)を重みで加重平均して 0〜100 にする。
-    # 以前は得点をそのまま足して重み合計で割っていたため、重みは分母にしか効かず、
-    # 既定以外の重みでは 100 を超えたり、重みを上げた軸ほど点が下がったりしていた。
     parts = [
         ("budget", bs, w.budget), ("area", as_, w.area), ("floor", fs, w.floor),
         ("pet", ps, w.pet), ("station", ss, w.station), ("age", ags, w.age),

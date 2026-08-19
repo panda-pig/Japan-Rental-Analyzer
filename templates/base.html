@@ -10,9 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/style.css?v={{ asset_v }}">
-{# グラフを使うページだけがライブラリを読み込む (echarts だけで約1MB)。
-   defer で HTML の解析を止めない。defer 同士は記述順に実行されるので、
-   ページ用スクリプトより先にライブラリが評価される。 #}
+
 {% block libs %}{% endblock %}
 </head>
 <body>

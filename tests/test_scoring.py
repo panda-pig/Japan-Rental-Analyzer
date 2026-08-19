@@ -96,10 +96,6 @@ def test_custom_weights_normalized():
     assert 0 <= r.total_score <= 100
 
 
-# ---- 权重 ----
-# 旧实现里权重只作用于分母,任何权重和 != 100 的配置都会失真
-# (全部设为 1 时曾得到 1250 分,提高某项权重反而降低总分)。以下用例锁住这两点。
-
 def _mixed():
     """预算満点(8万 <= 14万) 但築45年 → 築年数 0 分。用于观察加权方向。"""
     return _inp(total_monthly_cost=80000, building_age=45)
@@ -143,9 +139,6 @@ def test_zero_weights_do_not_crash():
     r = calculate_scores(_inp(), Weights(0, 0, 0, 0, 0, 0, 0, 0), **_kwargs())
     assert r.total_score == 0
 
-
-# ---- 偏好阈值 ----
-# min_floor / max_walk / max_age / min_area は以前ハードコードされた区切りに無視されていた。
 
 def test_min_floor_is_applied():
     assert calculate_scores(_inp(floor=4), Weights(), **_kwargs(min_floor=2)).floor_score == 10

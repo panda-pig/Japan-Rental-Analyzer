@@ -25,7 +25,6 @@ BASE = "https://www.homes.co.jp"
 SITEMAP_URL = f"{BASE}/machimusubi/sitemap-station.xml"
 _ST_URL_RE = re.compile(r"https://www\.homes\.co\.jp/machimusubi/(tokyo|kanagawa)/([a-z0-9]+)_(\d+)-st/")
 
-# カテゴリ名 → DB列
 CATEGORIES = [
     ("transport", r"交通の利便性"),
     ("safety", r"治安の良さ"),
@@ -34,10 +33,10 @@ CATEGORIES = [
     ("nature", r"自然の多さ"),
 ]
 
-MIN_MAP_SIZE = 150   # 東京+神奈川で数百駅のはず。これ未満は不完全とみなす
-_map_failed = False  # プロセス内で構築失敗したら以後スキップ
-_kks = None          # pykakasi は初回のみ初期化
-_slug_index = None   # {正規化slug: url} のメモリキャッシュ
+MIN_MAP_SIZE = 150
+_map_failed = False
+_kks = None
+_slug_index = None
 
 
 def normalize_station(name):
@@ -74,14 +73,13 @@ def _normalize_romaji(s):
     return s
 
 
-# pykakasi の辞書で誤読する駅名の例外表 (確認済みの誤読のみ追加)
 READING_OVERRIDES = {
-    "阿佐ヶ谷": "asagaya",      # asaketani と誤読
-    "日ノ出町": "hinodecho",    # nichinodemachi と誤読
-    "三ツ境": "mitsukyo",       # santsusakai と誤読
-    "大井町": "oimachi",        # ooichou と誤読
-    "向河原": "mukaigawara",    # koukawara と誤読
-    "たまプラーザ": "tamaplaza",  # 公式ローマ字が plaza 表記
+    "阿佐ヶ谷": "asagaya",
+    "日ノ出町": "hinodecho",
+    "三ツ境": "mitsukyo",
+    "大井町": "oimachi",
+    "向河原": "mukaigawara",
+    "たまプラーザ": "tamaplaza",
 }
 
 
@@ -138,7 +136,7 @@ def ensure_station_map(build=False, debug=False):
         _map_failed = True
         return n
     if n > 0:
-        execute("DELETE FROM machimusubi_stations")  # 旧形式(漢字キー等)を一掃
+        execute("DELETE FROM machimusubi_stations")
     found = _ST_URL_RE.findall(xml)
     for pref, slug, sid in found:
         execute("INSERT OR REPLACE INTO machimusubi_stations (station, url) VALUES (?,?)",
@@ -155,8 +153,6 @@ def ensure_station_map(build=False, debug=False):
 def _resolve_url(station_kanji):
     """漢字駅名 → まちむすび駅ページ URL (ローマ字化 + 正規化 + 近似照合)。"""
     global _slug_index
-    # マップが未完成のうちはキャッシュを信用せず毎回読み直す
-    # (Webプロセスが空マップを掴んだ後にバッチが構築するケースへの対策)
     if _slug_index is None or len(_slug_index) < MIN_MAP_SIZE:
         _slug_index = {}
         for r in query_all("SELECT station, url FROM machimusubi_stations"):
@@ -164,11 +160,11 @@ def _resolve_url(station_kanji):
     if not _slug_index:
         return None
     cands = _romaji_variants(station_kanji)
-    for cand in cands:          # まず完全一致 (slug が正解の基準)
+    for cand in cands:
         if cand in _slug_index:
             return _slug_index[cand]
     best = None
-    for cand in cands:          # 次に近似照合
+    for cand in cands:
         for hit in difflib.get_close_matches(cand, _slug_index.keys(), n=1, cutoff=0.86):
             ratio = difflib.SequenceMatcher(None, cand, hit).ratio()
             if best is None or ratio > best[0]:
@@ -200,7 +196,7 @@ def get_station_review(station, max_age_days=90, build_map=False):
         "SELECT * FROM station_reviews WHERE station=? AND fetched_at > datetime('now', ?)",
         (station, f"-{max_age_days} days"))
     if row:
-        return row if row.get("avg_score") else None  # スコア無し駅もキャッシュ(連打防止)
+        return row if row.get("avg_score") else None
     if ensure_station_map(build=build_map) == 0:
         return None
     url = _resolve_url(station)
@@ -208,7 +204,7 @@ def get_station_review(station, max_age_days=90, build_map=False):
         return None
     html = _fetch_retry(url)
     if html is None:
-        return None  # ネットワーク/レート制限: キャッシュせず次回再試行
+        return None
     scores = parse_station_scores(html)
     if len(scores) >= 3:
         avg = round(sum(scores.values()) / len(scores), 2)
@@ -218,7 +214,6 @@ def get_station_review(station, max_age_days=90, build_map=False):
             (station, url, scores.get("transport"), scores.get("safety"),
              scores.get("shopping"), scores.get("childcare"), scores.get("nature"), avg))
         return query_one("SELECT * FROM station_reviews WHERE station=?", (station,))
-    # ページは取れたがスコアが無い駅 (アンケート未実施等) → 記録して連打を防ぐ
     execute("INSERT OR REPLACE INTO station_reviews (station, url, avg_score, fetched_at) "
             "VALUES (?,?,NULL,CURRENT_TIMESTAMP)", (station, url))
     return None

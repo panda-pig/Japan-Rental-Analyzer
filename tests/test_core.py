@@ -11,7 +11,6 @@ from core.initial_cost import estimate_initial_cost
 from core.dedup import generate_listing_hash
 
 
-# --- money ---
 def test_parse_money_wan():
     assert parse_money("12.8万円") == 128000
 
@@ -44,7 +43,6 @@ def test_deposit_key_money_na():
     assert parse_deposit_key_money("なし", 100000) == 0
 
 
-# --- area / walk / floor / age ---
 def test_parse_area():
     assert parse_area("42.3m²") == 42.3
     assert parse_area("42.3㎡") == 42.3
@@ -67,11 +65,10 @@ def test_parse_building_age():
     assert parse_building_age("築12年") == 12
     assert parse_building_age("新築") == 0
     assert parse_building_age("築浅") is None
-    assert parse_building_age("2010年3月") == 16  # 相对 2026
+    assert parse_building_age("2010年3月") == 16
     assert parse_building_age(None) is None
 
 
-# --- pet / features ---
 def test_parse_pet_allowed():
     assert parse_pet_allowed("ペット可") == 1
     assert parse_pet_allowed("ペット相談") == 1
@@ -98,7 +95,6 @@ def test_parse_features_empty():
     assert all(v == 0 for v in feats.values())
 
 
-# --- address ---
 def test_tokyo_ward():
     r = parse_address("東京都大田区蒲田5-20-3")
     assert r["prefecture"] == "東京都"
@@ -175,15 +171,12 @@ def test_unparseable():
     assert r["prefecture"] is None
 
 
-# --- initial cost ---
 def test_initial_basic():
     r = estimate_initial_cost(rent=118000, deposit=118000, key_money=0)
-    # 118000 + 0 + 64900 + 118000 + 40000 = 340900
     assert r == 340900
 
 def test_initial_zero_deposit_key():
     r = estimate_initial_cost(rent=100000, deposit=0, key_money=0)
-    # 0 + 0 + 55000 + 100000 + 40000 = 195000
     assert r == 195000
 
 def test_initial_custom():
@@ -194,7 +187,6 @@ def test_initial_custom():
     assert r == 70000
 
 
-# --- dedup ---
 def test_hash_stable():
     h1 = generate_listing_hash("蒲田5-20-3", "〇〇マンション", "1LDK", 42.3, 3, 118000)
     h2 = generate_listing_hash("蒲田5-20-3", "〇〇マンション", "1LDK", 42.3, 3, 118000)

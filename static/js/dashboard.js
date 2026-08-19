@@ -4,7 +4,6 @@ const CHART = {
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82'],
 };
 const CHART_FONT = "'Noto Sans JP', sans-serif";
-// OS の「視差効果を減らす」設定時はグラフの登場アニメーションも止める
 const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const BASE_OPTION = {
   animation: !REDUCE_MOTION,
@@ -21,12 +20,11 @@ let regionData = [];
 let scoreByWard = {};
 let tableSort = { key: 'overall_score', dir: -1 };
 
-// 既存インスタンスを使い回し、リサイズ時は resize() だけ呼ぶ (再取得・再描画しない)
 const chartRegistry = {};
 function initChart(el) {
   const prev = chartRegistry[el.id];
   if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
-  el.querySelector(':scope > .chart-empty')?.remove();   // 前回の「データなし」を消してから描く
+  el.querySelector(':scope > .chart-empty')?.remove();
   const c = echarts.getInstanceByDom(el) || echarts.init(el);
   chartRegistry[el.id] = c;
   return c;
@@ -43,7 +41,6 @@ function regionGroup(r) {
 }
 const GROUP_COLOR = { '東京23区': CHART.palette[0], '横浜市': CHART.palette[1], '川崎市': CHART.palette[2], '主要都市': CHART.palette[3] };
 
-// canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
 function chartA11y(el, label) {
   if (!el) return;
   el.setAttribute('role', 'img');
@@ -53,7 +50,6 @@ const TABLE_HINT = '数値の詳細はページ下部の「全エリア一覧」
 
 const isNarrow = () => window.innerWidth <= 600;
 
-// 描画しない時は骨組み(.chart:empty)が回り続けるので、必ず中身を入れて止める
 function chartEmpty(el, msg) {
   if (el) el.innerHTML = `<div class="chart-empty">${msg || 'データがありません'}</div>`;
 }
@@ -73,7 +69,6 @@ function bar(id, data) {
   const narrow = isNarrow();
 
   if (narrow) {
-    // 縦棒だと 23 区のラベルが半分しか描画されない。横棒にして全件読めるようにする。
     el.style.height = (data.length * 19 + 50) + 'px';
     initChart(el).setOption({
       ...BASE_OPTION, tooltip,
@@ -100,7 +95,6 @@ function valueMap() {
   if (!rented.length) { chartEmpty(el); return; }
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
-  // 「安くて評価が高い」= 割安度の高い順に上位3件を代替テキストにする
   const best = [...rented].sort((a, b) => (b.overall_score / b.avg_rent) - (a.overall_score / a.avg_rent)).slice(0, 3);
   chartA11y(el, `狙い目エリアマップ。横軸が相場、縦軸が総合評価の散布図で、${rented.length}エリアを表示。` +
     `相場の中央値は${man(medRent)}円。左上ほど「安くて評価が高い」エリアで、上位は` +
@@ -163,7 +157,6 @@ function renderRegionRadar() {
   radar('chart-region-radar',
     dims.map(name => ({ name, max: 100 })),
     series);
-  // 選択が変わるたびに代替テキストも更新する
   chartA11y(document.getElementById('chart-region-radar'),
     'エリア比較レーダーチャート。各項目は100点満点。' +
     series.map(s => `${s.name}は` + dims.map((d, i) => `${d}${s.value[i]}`).join('、')).join('。') + '。');
@@ -176,7 +169,6 @@ function scoreBar(s) {
     <span style="font-size:11px;color:var(--text-muted);width:20px;text-align:right;">${s}</span></div>`;
 }
 
-// 住みやすさは高/中/低の3段階 → そのままラベル表示 (高=緑 好 / 中=橙 / 低=赤)
 function levelTag(lv) {
   if (!lv) return '<span style="color:var(--text-muted);">-</span>';
   const cls = lv === '高' ? 'good' : lv === '中' ? 'warn' : 'bad';
@@ -205,7 +197,6 @@ function renderTable() {
   </tr>`).join('');
 }
 
-// 现在の並び替え状態を aria-sort と矢印で表示 (スクリーンリーダー + 視覚)
 function updateSortIndicators() {
   document.querySelectorAll('#region-table th[data-sort]').forEach(th => {
     const active = th.dataset.sort === tableSort.key;
@@ -226,7 +217,6 @@ function metricCard(num, label, cls, sub) {
   return `<div class="metric ${cls || ''}"><div class="num">${num}</div><div class="label">${label}</div>${sub ? `<div class="label" style="color:var(--text-secondary);margin-top:2px;">${sub}</div>` : ''}</div>`;
 }
 
-// 取得済みデータからグラフだけ描き直す (縦棒⇄横棒の切替に使う。再取得はしない)
 let dashData = null;
 function renderCharts() {
   if (!dashData) return;
@@ -251,7 +241,6 @@ async function load() {
     metricCard(s.best_value ? s.best_value.ward : '-', '狙い目エリア', '', s.best_value ? `評価${s.best_value.score} / ${man(s.best_value.rent)}` : ''),
   ].join('');
 
-  // レーダーはセレクタの値を読むので、先に選択肢を用意してから描画する
   const opts = '<option value="">エリアを選択...</option>' +
     regionData.map(r => `<option value="${regionName(r)}">${regionName(r)}</option>`).join('');
   document.getElementById('region-selector-1').innerHTML = opts;
@@ -280,13 +269,11 @@ async function load() {
   updateSortIndicators();
 }
 
-// リサイズでデータを取り直す必要はない。既存グラフの寸法だけ合わせる。
 let _rz;
 let _wasNarrow = isNarrow();
 window.addEventListener('resize', () => {
   clearTimeout(_rz);
   _rz = setTimeout(() => {
-    // ブレークポイントをまたいだ時だけ組み替える (それ以外は寸法合わせのみ)
     const now = isNarrow();
     if (now !== _wasNarrow) { _wasNarrow = now; renderCharts(); return; }
     Object.values(chartRegistry).forEach(c => { if (!c.isDisposed()) c.resize(); });

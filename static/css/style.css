@@ -1,37 +1,35 @@
 :root {
-  /* ===== 和色 — 日系ミニマル (low-saturation traditional palette) ===== */
-  --bg: #FAF9F5;          /* 生成り off-white */
+  --bg: #FAF9F5;
   --bg-alt: #F1EFE9;
   --surface: #FFFFFF;
   --surface-hover: #FAF9F5;
-  --border: #E7E4DB;      /* hairline warm gray */
+  --border: #E7E4DB;
   --border-light: #EFEDE6;
 
-  --text-primary: #2B2A26;   /* 墨 */
+  --text-primary: #2B2A26;
   --text-secondary: #6E6C63;
-  --text-muted: #767366;     /* WCAG AA: 4.5:1 on bg/surface (was #A6A398 ≈2.4:1) */
+  --text-muted: #767366;
   --text-inverse: #FFFFFF;
 
-  --accent: #56696E;         /* 藍鼠 muted blue-gray */
+  --accent: #56696E;
   --accent-light: #6A7D82;
   --accent-deep: #3E4F53;
   --accent-bg: #EDF1F1;
   --accent-border: #CBD5D5;
 
-  --good: #527051;           /* 苔緑 sage — AA on white & good-bg */
+  --good: #527051;
   --good-bg: #EEF3EC;
   --good-border: #CBDBC6;
-  --warn: #8C6220;           /* 山吹くすみ — AA on white & warn-bg (was #A97A2E ≈3.4:1) */
+  --warn: #8C6220;
   --warn-bg: #F7F1E4;
   --warn-border: #E7D6AE;
-  --bad: #9E4A46;            /* 弁柄 muted terracotta — AA on white & bad-bg */
+  --bad: #9E4A46;
   --bad-bg: #F6ECEA;
   --bad-border: #E4C4BF;
 
   --tag-bg: #F1EFE9;
   --tag-text: #5A574E;
 
-  /* shadows are nearly absent — hairlines and whitespace carry hierarchy */
   --shadow-sm: 0 1px 1px rgba(43, 42, 38, 0.03);
   --shadow-md: 0 1px 3px rgba(43, 42, 38, 0.05);
   --shadow-lg: 0 6px 20px rgba(43, 42, 38, 0.07);
@@ -44,12 +42,10 @@
   --transition: 0.22s cubic-bezier(0.32, 0.08, 0.24, 1);
 }
 
-/* ===== Reset ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { scroll-behavior: smooth; }
 
-/* 前庭障害への配慮: OS で「視差効果を減らす」設定時は動きを止める */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
@@ -83,7 +79,6 @@ body {
   border-radius: 3px;
 }
 
-/* 視覚的には隠すがスクリーンリーダーには読ませる (グラフの代替テキスト等) */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -96,7 +91,6 @@ body {
   border: 0;
 }
 
-/* キーボードで最初に到達 → 本文へジャンプ */
 .skip-link {
   position: absolute;
   left: 12px;
@@ -117,13 +111,11 @@ body {
   top: 12px;
 }
 
-/* 並び替え中の列に付く小さな矢印 */
 .sort-arrow {
   font-size: 10px;
   color: var(--accent);
 }
 
-/* ===== Navigation ===== */
 .nav {
   background: rgba(250, 249, 245, 0.9);
   backdrop-filter: blur(8px);
@@ -187,7 +179,6 @@ body {
   border-radius: 0;
 }
 
-/* ===== Layout ===== */
 .container {
   max-width: 1180px;
   margin: 0 auto;
@@ -213,7 +204,6 @@ body {
   text-wrap: pretty;
 }
 
-/* ===== Hero (トップの価値提案) ===== */
 .hero {
   padding: 20px 0 40px;
   margin-bottom: 44px;
@@ -305,7 +295,6 @@ body {
   margin-bottom: 6px;
 }
 
-/* ===== Cards — hairline borders, no elevation ===== */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -336,7 +325,6 @@ body {
   letter-spacing: 0;
 }
 
-/* ===== Metric Cards — quiet hairline tiles, whitespace separation ===== */
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
@@ -386,7 +374,6 @@ body {
 .metric.good .num { color: var(--good); }
 .metric.warn .num { color: var(--warn); }
 
-/* ===== Badges ===== */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -405,7 +392,6 @@ body {
 .badge.platform { background: var(--bg-alt); color: var(--text-secondary); border: 1px solid var(--border); }
 .badge.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
 
-/* ===== Tags ===== */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -425,7 +411,6 @@ body {
 .tag.warn { background: var(--warn-bg); color: var(--warn); }
 .tag.bad { background: var(--bad-bg); color: var(--bad); }
 
-/* ===== 設備・特徴 chips — present emphasized, absent quieted ===== */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -439,7 +424,7 @@ body {
   transition: all var(--transition);
 }
 .chip.on {
-  background: #E4EEDE;          /* 苔緑 — 少し実め */
+  background: #E4EEDE;
   color: #46603F;
   border-color: #BED2B3;
   font-weight: 600;
@@ -452,7 +437,6 @@ body {
   font-weight: 400;
 }
 
-/* 災害「高」— 実心の赤で警告 */
 .tag.hazard-high {
   background: var(--bad);
   color: #fff;
@@ -461,7 +445,6 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* お気に入り★ — 山吹で目立たせる */
 .fav-star {
   color: var(--warn);
   font-size: 12.5px;
@@ -469,7 +452,6 @@ body {
   vertical-align: middle;
 }
 
-/* エリア平均比の偏差 — pill バッジ */
 .dev-badge {
   display: inline-flex;
   align-items: center;
@@ -483,13 +465,11 @@ body {
 .dev-badge.cheap  { background: var(--good-bg); color: var(--good); border-color: var(--good-border); }
 .dev-badge.pricey { background: var(--bad-bg);  color: var(--bad);  border-color: var(--bad-border); }
 
-/* ===== 平台来源 badge — accent by source (washoku-tinted) ===== */
 .badge.platform.p-suumo  { background: var(--good-bg);   color: var(--good);        border-color: var(--good-border); }
 .badge.platform.p-homes  { background: var(--warn-bg);   color: var(--warn);        border-color: var(--warn-border); }
 .badge.platform.p-athome { background: var(--accent-bg); color: var(--accent-deep); border-color: var(--accent-border); }
 .badge.platform.p-yahoo  { background: var(--bad-bg);    color: var(--bad);         border-color: var(--bad-border); }
 
-/* ===== Buttons — flat, restrained ===== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -563,7 +543,6 @@ body {
 
 .link-btn:hover { color: var(--accent-deep); text-decoration: underline; }
 
-/* ===== Filters ===== */
 .filters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -599,14 +578,12 @@ body {
 
 .filters input::placeholder { color: var(--text-muted); }
 
-/* ===== Grid ===== */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 24px;
 }
 
-/* ===== Listing Card ===== */
 .listing-card { display: flex; flex-direction: column; gap: 10px; }
 .listing-card .card-header { display: flex; align-items: center; gap: 8px; }
 .listing-card h3 { font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.3; }
@@ -622,7 +599,6 @@ body {
 .listing-card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .listing-card .tags { display: flex; flex-wrap: wrap; }
 
-/* ===== Tables ===== */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -654,12 +630,8 @@ tbody tr:last-child td { border-bottom: none; }
 .pool-row { cursor: pointer; }
 .pool-row:hover td { color: var(--text-primary); }
 
-/* ===== Charts ===== */
 .chart { height: 320px; width: 100%; }
 
-/* グラフ描画前(echarts は約1MB、回線が細いと数秒かかる)の骨組み。
-   echarts が canvas を挿すと :empty でなくなり自動的に消える。
-   データ無しで描画しない場合は .chart-empty を入れるので出しっぱなしにならない。 */
 .chart:empty {
   border-radius: var(--radius-md);
   background: linear-gradient(100deg, var(--bg-alt) 30%, #F6F4EF 50%, var(--bg-alt) 70%);
@@ -672,7 +644,6 @@ tbody tr:last-child td { border-bottom: none; }
   to { background-position: -220% 0; }
 }
 
-/* 動きを減らす設定では点滅させず、静かな下地だけ残す */
 @media (prefers-reduced-motion: reduce) {
   .chart:empty { animation: none; background: var(--bg-alt); }
 }
@@ -681,7 +652,6 @@ tbody tr:last-child td { border-bottom: none; }
   height: 320px; color: var(--text-muted); font-size: 13px; text-align: center;
 }
 
-/* ===== Details / Summary ===== */
 details {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -691,7 +661,6 @@ details {
 }
 details summary { font-weight: 600; cursor: pointer; font-size: 15px; color: var(--text-primary); }
 
-/* ===== Select & Input 通用 ===== */
 select, input[type="text"], input[type="number"], input[type="date"] {
   padding: 8px 11px;
   border: 1px solid var(--border);
@@ -709,7 +678,6 @@ select:focus, input:focus {
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
-/* ===== Empty State ===== */
 .empty-state {
   text-align: center;
   padding: 64px 24px;
@@ -729,7 +697,6 @@ select:focus, input:focus {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-/* ===== Responsive ===== */
 @media (max-width: 768px) {
   .nav { padding: 0 14px; overflow-x: auto; gap: 2px; }
   .nav-brand { margin-right: 14px; font-size: 13px; }
@@ -752,9 +719,6 @@ select:focus, input:focus {
   .hero-actions .btn-lg { flex: 1; }
 }
 
-/* ===== タップ領域 — 狭い画面 / タッチ端末で指で押せる最小サイズを確保 ===== */
-/* 表は横スクロールできるのに列が潰れ、「エ/リ/ア」と1文字ずつ折り返していた。
-   見出しと短い列は折り返さず、物件名だけ通常の折り返しにする。 */
 @media (max-width: 768px) {
   #pool-table th,
   #region-table th,
@@ -762,8 +726,6 @@ select:focus, input:focus {
   #pool-table td:nth-child(3) { white-space: normal; min-width: 140px; }
 }
 
-/* 375px 幅で「設定」が画面外に隠れていた。5タブが収まるように詰める。
-   (縦の 44px タップ領域は下のブロックで維持) */
 @media (max-width: 400px) {
   .nav { padding: 0 10px; gap: 0; }
   .nav-brand { margin-right: 8px; }
@@ -778,10 +740,8 @@ select:focus, input:focus {
     min-height: 44px;
   }
 
-  /* 小画面ではブランド名が隠れアイコンのみ (26px) になるため横幅を確保 */
   .nav-brand { min-width: 44px; }
 
-  /* 表内の小さな文字ボタン (気になる/解除) — 行内で押しやすく */
   .link-btn {
     display: inline-flex;
     align-items: center;
@@ -790,10 +750,9 @@ select:focus, input:focus {
     min-height: 44px;
     padding: 0 8px;
     margin: 0 -8px;
-    white-space: nowrap;   /* 折り返して細くならないように (表は横スクロール可) */
+    white-space: nowrap;
   }
 
-  /* アイコンのみのリンク (→) — 文字は小さいが領域は44px確保 */
   #pool-table a[target="_blank"] {
     display: inline-flex;
     align-items: center;
@@ -803,14 +762,12 @@ select:focus, input:focus {
     margin: -12px -8px;
   }
 
-  /* 比較チェックボックス — 13px では小さすぎる (WCAG 2.5.8 の 24px を確保) */
   .pool-check {
     width: 24px;
     height: 24px;
     margin: 10px 6px;
   }
 
-  /* フォーム部品も指で押せる高さに */
   input[type="text"],
   input[type="number"],
   select,
@@ -818,7 +775,6 @@ select:focus, input:focus {
     min-height: 44px;
   }
 
-  /* 並び替え見出し — 縦は行高で足りるので横幅を確保 */
   #region-table th[data-sort] {
     padding-left: 14px;
     padding-right: 14px;

@@ -16,8 +16,6 @@ from bs4 import BeautifulSoup
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_PATH, SCRAPE_USER_AGENT, SCRAPE_SLEEP_SECONDS
 
-# (prefecture, city, ward, suumo_url_slug, safety, convenience, environment)
-# slug = URL 中的 sc_xxx 部分
 TOKYO_WARDS = [
     ("千代田区", "chiyoda", "高", "高", "中"), ("中央区", "chuo", "高", "高", "中"),
     ("港区", "minato", "高", "高", "中"), ("新宿区", "shinjuku", "中", "高", "中"),
@@ -73,7 +71,6 @@ def fetch_avg_rent(prefecture, slug):
         if resp.status_code != 200:
             return None, None
         soup = BeautifulSoup(resp.text, "html.parser")
-        # 找家賃相場表
         rent_1ldk = None
         rent_1k = None
         for t in soup.select("table"):
@@ -100,28 +97,24 @@ def seed_regions():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("DELETE FROM region_stats")
 
-    # 东京23区
     for ward, slug, safety, conv, env in TOKYO_WARDS:
         rent_1ldk, rent_1k = fetch_avg_rent("tokyo", slug)
         rent = rent_1ldk or rent_1k
         print(f"東京都 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
         _insert(conn, "東京都", None, ward, rent, safety, conv, env)
 
-    # 横浜各区
     for ward, slug, safety, conv, env in YOKOHAMA_WARDS:
         rent_1ldk, rent_1k = fetch_avg_rent("kanagawa", slug)
         rent = rent_1ldk or rent_1k
         print(f"横浜市 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
         _insert(conn, "神奈川県", "横浜市", ward, rent, safety, conv, env)
 
-    # 川崎各区
     for ward, slug, safety, conv, env in KAWASAKI_WARDS:
         rent_1ldk, rent_1k = fetch_avg_rent("kanagawa", slug)
         rent = rent_1ldk or rent_1k
         print(f"川崎市 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
         _insert(conn, "神奈川県", "川崎市", ward, rent, safety, conv, env)
 
-    # 全国主要城市(手动)
     major = [
         ("大阪府", None, "大阪市", 95000, "中", "高", "中"),
         ("京都府", None, "京都市", 92000, "高", "高", "高"),

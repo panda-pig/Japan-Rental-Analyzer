@@ -47,7 +47,6 @@ def test_extract_station_clean():
 
 
 def test_extract_station_dirty_picks_min_walk():
-    # 本番データで確認された表記 (SUUMO 詳細の交通ブロックまるごと)
     raw = "ＪＲ山手線/東京駅 歩10分東京メトロ銀座線/京橋駅 歩7分東京メトロ日比谷線/八丁堀駅 歩3分"
     assert extract_station(raw) == "八丁堀"
 
@@ -58,32 +57,28 @@ def test_extract_station_single_with_walk():
 
 
 def test_romaji_matches_slug_conventions():
-    # 漢字駅名 → まちむすび slug 流儀の正規化ローマ字
     assert _romaji("八丁堀") == "hatchobori"
     assert _romaji("東京") == "tokyo"
     assert _romaji("京橋") == "kyobashi"
-    assert _romaji("新橋") == "shimbashi"      # nb → mb
-    assert _romaji("大倉山") == "okurayama"     # oo → o
-    assert _romaji("自由が丘") == "jiyugaoka"   # uu → u
+    assert _romaji("新橋") == "shimbashi"
+    assert _romaji("大倉山") == "okurayama"
+    assert _romaji("自由が丘") == "jiyugaoka"
     assert _romaji("東神奈川") == "higashikanagawa"
 
 
 def test_normalize_romaji_slug_side():
-    # slug 側も同じ正規化を通すので表記ゆれが揃う
     assert _normalize_romaji("hatchobori") == "hatchobori"
     assert _normalize_romaji("shimbashi") == "shimbashi"
 
 
 def test_romaji_ke_ga_stations():
-    # ヶ/ケ 駅名: 素読みと「が」置換版の両候補を返し, slug 照合でどちらかが当たる
     assert "hodogaya" in _romaji_variants("保土ケ谷")
     assert "kibogaoka" in _romaji_variants("希望ヶ丘")
     assert "tsurugamine" in _romaji_variants("鶴ヶ峰")
-    assert "ichigaya" in _romaji_variants("市ヶ谷")   # 辞書の素読みが正しいケース
+    assert "ichigaya" in _romaji_variants("市ヶ谷")
 
 
 def test_romaji_reading_overrides():
-    # 確認済み誤読の例外表
     assert _romaji("阿佐ヶ谷") == "asagaya"
     assert _romaji("日ノ出町") == "hinodecho"
     assert _romaji("三ツ境") == "mitsukyo"

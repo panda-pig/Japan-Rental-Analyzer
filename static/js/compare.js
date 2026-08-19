@@ -23,7 +23,6 @@ function drawCompareRadar(data) {
   const scored = data.filter(l => l.total_score != null);
   if (!el || scored.length < 2) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
-  // canvas はスクリーンリーダーには空 → role=img + 各物件のスコアを読み上げ可能にする
   el.setAttribute('role', 'img');
   el.setAttribute('aria-label', `${scored.length}件の物件を8次元スコアで比較するレーダーチャート。` +
     scored.map(l => `${l.title}は総合${l.total_score}点`).join('、') +
@@ -31,7 +30,6 @@ function drawCompareRadar(data) {
   if (radarChart) radarChart.dispose();
   radarChart = echarts.init(el);
   radarChart.setOption({
-    // OS の「視差効果を減らす」設定時は登場アニメーションを止める
     animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     textStyle: { fontFamily: CHART_FONT, color: '#6E6C63', fontSize: 12 },
     tooltip: {
@@ -84,7 +82,6 @@ async function load() {
   for (const [label, key] of rows) {
     html += `<tr><td style="font-weight:600;color:var(--text-primary);">${label}</td>` + data.map(l => {
       const v = l[key];
-      // cell は完成した HTML。素の値(間取り・駅名・プラットフォーム等)は必ず esc() を通す。
       let cell;
       if (["total_monthly_cost", "rent", "management_fee", "initial_cost_estimate", "deposit", "key_money"].includes(key))
         cell = esc((v || 0).toLocaleString() + '円');

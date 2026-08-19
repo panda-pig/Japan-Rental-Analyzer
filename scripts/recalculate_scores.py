@@ -25,8 +25,6 @@ def recalculate():
     )
     listings = conn.execute("SELECT * FROM rental_listings WHERE is_active=1").fetchall()
     for l in listings:
-        # 初期費用の係数を変えたら保存値も更新する。以前は保存値だけ古い係数のまま残り、
-        # レポートのグラフ(ユーザー係数)と指標カード・比較表(保存値)で金額が食い違っていた。
         initial = estimate_initial_cost(
             l["rent"], l["deposit"], l["key_money"],
             broker_fee_rate=pref["broker_fee_rate"],

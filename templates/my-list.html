@@ -7,7 +7,6 @@
 {% block content %}
 <h1 class="page-title">物件分析</h1>
 
-<!-- URL输入框 -->
 <div class="card" style="margin-bottom:24px;">
   <p id="import-help" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
     物件詳細ページのURLを貼り付けてください。自動で解析し、エリア平均と比較します。
@@ -20,7 +19,6 @@
   <div id="import-result" role="status" aria-live="polite" aria-atomic="true" style="margin-top:12px;font-size:13px;"></div>
 </div>
 
-<!-- 分析报告容器 -->
 <div id="analysis-container"></div>
 {% endblock %}
 {% block js %}my-list.js{% endblock %}

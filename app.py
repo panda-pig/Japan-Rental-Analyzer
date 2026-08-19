@@ -9,18 +9,13 @@ from scripts.seed_regions import seed_regions
 
 app = Flask(__name__)
 
-# 启动时自动建表 + 投入区域基准(幂等,首次部署或磁盘重置后生效)
 init_db()
-# 如果 region_stats 为空才 seed(避免每次启动覆盖)
 from db_helper import query_one, execute as _execute
 if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
     seed_regions()
-# 清理旧版种子遗留的无名行(ward/city 都为空 → 前端曾显示 "null")
 _execute("DELETE FROM region_stats WHERE ward IS NULL AND city IS NULL")
 
 
-# ===== 転送量の最適化 =====
-# gunicorn は自動で gzip しない。JSON/CSS/JS はテキストなので圧縮がよく効く。
 _COMPRESSIBLE = ("application/json", "text/css", "application/javascript",
                  "text/javascript", "text/html")
 _MIN_COMPRESS_BYTES = 1024
@@ -36,14 +31,13 @@ def _compress(resp):
         return resp
     if not resp.mimetype or not resp.mimetype.startswith(_COMPRESSIBLE):
         return resp
-    # 静的ファイルはファイルラッパのまま返るので、読み出すには passthrough を解く
     resp.direct_passthrough = False
     data = resp.get_data()
     if len(data) < _MIN_COMPRESS_BYTES:
         return resp
     import gzip as _gzip
     packed = _gzip.compress(data, 6)
-    if len(packed) >= len(data):      # 圧縮で増えるなら諦める
+    if len(packed) >= len(data):
         return resp
     resp.set_data(packed)
     resp.headers["Content-Encoding"] = "gzip"
@@ -52,8 +46,6 @@ def _compress(resp):
     return resp
 
 
-# 静的ファイルは URL に mtime を載せて1年キャッシュさせる。
-# デプロイでファイルが変わればURLも変わるので、古いCSSが残ることはない。
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
 
 
@@ -73,10 +65,7 @@ ASSET_V = _asset_stamp()
 app.jinja_env.globals["asset_v"] = ASSET_V
 
 
-# ===== 破壊的・設定変更系エンドポイントの保護 =====
-# 公開デプロイでは誰でも物件プールを空にしたり設定を書き換えられる状態だった。
 # ADMIN_TOKEN を設定した環境でのみ要求する(未設定ならローカル開発として素通し)。
-# 閲覧・URL解析・お気に入りは demo として開けたままにする。
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 _PROTECTED = (
@@ -195,8 +184,6 @@ def _score_single(listing_id):
     conn.close()
 
 
-# ===== Pages =====
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -227,9 +214,6 @@ def page_settings():
     return render_template("settings.html")
 
 
-# ===== Dashboard API =====
-
-# 区域定性等级 → 0~100 分数(C①:reinfolib 公开数据到手前的种子分,来源以后可替换)
 LEVEL_SCORE = {"高": 85, "中": 60, "低": 35}
 
 
@@ -262,9 +246,7 @@ def api_dashboard():
         "SELECT AVG(s.total_score) AS a FROM listing_scores s JOIN rental_listings l ON s.listing_id=l.id WHERE l.is_active=1")["a"] or 0
     fav_count = query_one("SELECT COUNT(*) AS c FROM listing_status")["c"]
 
-    # 区域基准数据(补展示分)
     regions = [_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC")]
-    # 狙い目/相场概览只看关东(东京/神奈川),全国主要城市仅作参考不参与
     rented = [r for r in regions if r.get("avg_rent") and r.get("prefecture") in ("東京都", "神奈川県")]
     cheapest = min(rented, key=lambda x: x["avg_rent"]) if rented else None
     priciest = max(rented, key=lambda x: x["avg_rent"]) if rented else None
@@ -276,31 +258,24 @@ def api_dashboard():
         "rent_min": cheapest["avg_rent"] if cheapest else None,
         "rent_max": priciest["avg_rent"] if priciest else None,
     }
-    # 东京23区平均租金
     tokyo_regions = query_all("SELECT ward AS name, avg_rent AS value FROM region_stats WHERE prefecture='東京都' ORDER BY value DESC")
-    # 横浜各区
     yokohama_regions = query_all("SELECT ward AS name, avg_rent AS value FROM region_stats WHERE city='横浜市' ORDER BY value DESC")
 
-    # 用户导入物件的区域分布
     user_ward_dist = query_all(
         "SELECT ward AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 AND ward IS NOT NULL GROUP BY ward ORDER BY value DESC")
 
-    # 用户导入物件 vs 区域均价散点(带区域基准)
     user_scatter = query_all("""SELECT l.area_m2 AS x, l.total_monthly_cost AS y,
         l.title, l.ward, l.layout, r.avg_rent AS region_avg
         FROM rental_listings l LEFT JOIN region_stats r ON l.ward = r.ward
         WHERE l.is_active=1""")
 
-    # 平台来源
     platform_dist = query_all(
         "SELECT platform AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 GROUP BY platform")
 
-    # 价格历史
     price_drop = query_one("""SELECT COUNT(*) AS c FROM listing_price_history h
         JOIN rental_listings l ON h.listing_id=l.id
         WHERE l.is_active=1 AND l.total_monthly_cost < h.total_monthly_cost""")["c"]
 
-    # 状态分布
     status_dist = query_all(
         "SELECT status AS name, COUNT(*) AS value FROM listing_status GROUP BY status")
 
@@ -335,15 +310,12 @@ def api_region_detail(ward):
     return jsonify(_enrich_region(row))
 
 
-# ===== My List Analysis API =====
-
 @app.route("/api/my-list")
 def api_my_list():
     """我的关注分析:导入房源 + 区域基准对比 + 雷达数据 + 价格历史 + 状态进度。"""
     pref = query_one("SELECT * FROM user_preferences WHERE id=1")
     max_cost = pref["max_total_monthly_cost"] if pref else 140000
 
-    # 所有导入房源(含评分 + 区域基准)
     listings = query_all("""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
         s.budget_score, s.area_score, s.commute_score, s.floor_score, s.pet_score,
         s.station_score, s.age_score, s.initial_cost_score,
@@ -356,7 +328,6 @@ def api_my_list():
         LEFT JOIN listing_status st ON st.listing_id=l.id
         WHERE l.is_active=1 ORDER BY s.total_score DESC""")
 
-    # 駅の住民評価を Python 側で付与 (nearest_station は表記ゆれがあるため抽出して照合)
     from scrapers.machimusubi import extract_station
     st_keys = {l["id"]: extract_station(l.get("nearest_station")) for l in listings}
     uniq_sts = sorted({k for k in st_keys.values() if k})
@@ -374,19 +345,16 @@ def api_my_list():
             l["st_" + col] = rv[col] if rv else None
         l["st_avg"] = rv["avg_score"] if rv else None
 
-    # 指标卡
     total = len(listings)
     budget_match = len([l for l in listings if l.get("total_monthly_cost") and l["total_monthly_cost"] <= max_cost])
     avg_cost = sum(l.get("total_monthly_cost") or 0 for l in listings) / total if total else 0
     avg_score = sum(l.get("total_score") or 0 for l in listings) / total if total else 0
     uncontacted = len([l for l in listings if not l.get("fav_status")])
 
-    # 散点数据(面积 vs 月額,带区域均价)
     scatter_data = [{"x": l.get("area_m2"), "y": l.get("total_monthly_cost"),
                      "name": l.get("title"), "ward": l.get("ward"),
                      "region_avg": l.get("region_avg_rent")} for l in listings if l.get("area_m2") and l.get("total_monthly_cost")]
 
-    # 雷达数据(8维度,多套叠加)
     radar_indicators = [
         {"name": "予算", "max": 20}, {"name": "面積", "max": 15},
         {"name": "通勤", "max": 15}, {"name": "階数", "max": 10},
@@ -399,9 +367,8 @@ def api_my_list():
                   l.get("pet_score") or 0, l.get("station_score") or 0,
                   l.get("age_score") or 0, l.get("initial_cost_score") or 0],
         "name": l.get("title", "?")[:20],
-    } for l in listings[:8]]  # 最多8套叠加
+    } for l in listings[:8]]
 
-    # 对比表数据
     compare_rows = [{
         "id": l["id"], "title": l.get("title"), "platform": l.get("platform"),
         "ward": l.get("ward"), "total_monthly_cost": l.get("total_monthly_cost"),
@@ -433,14 +400,12 @@ def api_my_list():
         "detail_url": l.get("detail_url"),
     } for l in listings]
 
-    # 特徴クラウド(词云):聚合房源池的設備・特徴关键词频次
     feature_labels = [
         ("bath_toilet_separate", "バストイレ別"), ("auto_lock", "オートロック"),
         ("delivery_box", "宅配ボックス"), ("south_facing", "南向き"),
         ("aircon", "エアコン"), ("pet_allowed", "ペット可"),
         ("two_person_allowed", "2人入居可"),
     ]
-    # 语义统一为"共通の魅力・条件クリア"正向标签(設備 + 达标标签),不含裸间取り
     ideal_area = pref["ideal_area_m2"] if pref else 40
     cloud = {}
 
@@ -448,10 +413,9 @@ def api_my_list():
         cloud[label] = cloud.get(label, 0) + 1
 
     for l in listings:
-        for col, label in feature_labels:  # 設備
+        for col, label in feature_labels:
             if l.get(col):
                 bump(label)
-        # 达标标签(对用户条件/相场的正向判断)
         if l.get("total_monthly_cost") and l["total_monthly_cost"] <= max_cost:
             bump("予算内")
         if l.get("total_monthly_cost") and l.get("region_avg_rent") and l["total_monthly_cost"] < l["region_avg_rent"]:
@@ -472,7 +436,6 @@ def api_my_list():
         [{"name": k, "value": v} for k, v in cloud.items()],
         key=lambda x: x["value"], reverse=True)
 
-    # 间取り分布(饼图用)
     layout_counts = {}
     for l in listings:
         if l.get("layout"):
@@ -481,7 +444,6 @@ def api_my_list():
         [{"name": k, "value": v} for k, v in layout_counts.items()],
         key=lambda x: x["value"], reverse=True)
 
-    # 区域偏离度
     deviations = [{
         "name": l.get("title", "?")[:20],
         "ward": l.get("ward"),
@@ -491,10 +453,8 @@ def api_my_list():
                         if l.get("total_monthly_cost") and l.get("region_avg_rent") else None,
     } for l in listings if l.get("total_monthly_cost") and l.get("region_avg_rent")]
 
-    # 状态进度
     status_progress = query_all("""SELECT status, COUNT(*) AS value FROM listing_status GROUP BY status""")
 
-    # 价格历史(有历史数据的物件)
     price_history = query_all("""SELECT l.title, l.id, h.total_monthly_cost, h.checked_at
         FROM listing_price_history h JOIN rental_listings l ON h.listing_id=l.id
         ORDER BY l.id, h.checked_at""")
@@ -521,8 +481,6 @@ def api_my_list():
         },
     })
 
-
-# ===== Listings API =====
 
 @app.route("/api/listings")
 def api_listings():
@@ -593,7 +551,6 @@ def api_listing_detail(lid):
     if request.method == "DELETE":
         if not query_one("SELECT id FROM rental_listings WHERE id=?", (lid,)):
             return jsonify({"error": "not found"}), 404
-        # 4テーブルを1トランザクションで消す(途中で失敗しても半端に残さない)
         from db_helper import transaction
         with transaction() as conn:
             conn.execute("DELETE FROM listing_price_history WHERE listing_id=?", (lid,))
@@ -630,8 +587,6 @@ def api_rankings():
     return jsonify(query_all(sql, params))
 
 
-# ===== Status / Favorites API =====
-
 @app.route("/api/status", methods=["GET", "POST"])
 def api_status():
     if request.method == "GET":
@@ -655,7 +610,6 @@ def api_status_modify(sid):
     if request.method == "DELETE":
         execute("DELETE FROM listing_status WHERE id=?", (sid,))
         return jsonify({"ok": True})
-    # 部分更新:只改请求里带的字段(避免只发 status 时把 memo/viewing_date 清空)
     data = request.json or {}
     allowed = ["status", "priority", "memo", "contacted", "viewing_date", "decision"]
     fields = [k for k in allowed if k in data]
@@ -666,8 +620,6 @@ def api_status_modify(sid):
     execute(f"UPDATE listing_status SET {set_clause} WHERE id=?", params)
     return jsonify({"ok": True})
 
-
-# ===== Compare API =====
 
 @app.route("/api/compare")
 def api_compare():
@@ -696,8 +648,6 @@ def api_pool_clear():
         conn.execute("DELETE FROM rental_listings")
     return jsonify({"ok": True, "deleted": n})
 
-
-# ===== Import / Scrape API =====
 
 @app.route("/api/import/csv", methods=["POST"])
 def api_import_csv():
@@ -740,10 +690,8 @@ def api_import_detail():
     conn.commit()
     conn.close()
 
-    # 只算这一条(不重算全部,避免超时)
     _score_single(listing_id)
 
-    # Phase C: 最寄駅の住民評価を best-effort で取得 (失敗しても導入は成功扱い)
     try:
         from scrapers.machimusubi import get_station_review
         if raw.nearest_station:
@@ -772,7 +720,6 @@ def api_listing_refresh(lid):
         return jsonify({"error": "物件が見つかりません"}), 404
 
     url = listing["detail_url"]
-    # 检查旧价格
     old_cost = listing["total_monthly_cost"]
 
     html = fetch_html(url)
@@ -795,11 +742,8 @@ def api_listing_refresh(lid):
     conn.commit()
     conn.close()
 
-    # 1件の再取得で全件を再計算していた。目標駅を設定していると
-    # 物件数ぶんの通勤時間APIまで叩くので、この物件だけ計算し直す。
     _score_single(lid)
 
-    # 检查价格是否变化
     new_listing = query_one("SELECT total_monthly_cost FROM rental_listings WHERE id=?", (lid,))
     new_cost = new_listing["total_monthly_cost"] if new_listing else None
     price_changed = old_cost != new_cost
@@ -823,8 +767,6 @@ def api_scrape():
     log = query_all("SELECT * FROM import_logs ORDER BY id DESC LIMIT 1")
     return jsonify(log[0] if log else {})
 
-
-# ===== Sources API =====
 
 @app.route("/api/sources")
 def api_sources():
@@ -850,8 +792,6 @@ def api_source_modify(sid):
     return jsonify({"ok": True})
 
 
-# ===== Preferences API =====
-
 @app.route("/api/preferences")
 def api_preferences():
     return jsonify(query_one("SELECT * FROM user_preferences WHERE id=1"))
@@ -866,16 +806,12 @@ def api_preferences_update():
               "commute_weight", "floor_weight", "pet_weight", "station_weight",
               "age_weight", "initial_cost_weight", "broker_fee_rate",
               "prepaid_rent_months", "misc_cost"]
-    # 送られてきた項目だけ更新する。以前は data.get() で全項目を書いていたため、
-    # 画面が送らない項目 (require_pet_allowed / ideal_walk_minutes) が NULL で潰れていた。
     present = [f for f in fields if f in data]
     if present:
         sets = ", ".join(f"{f}=?" for f in present)
         params = [data[f] for f in present] + ["1"]
         execute(f"UPDATE user_preferences SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=?", params)
 
-    # 初期費用の係数は純粋な計算なので、保存した時点で保存値も揃えておく
-    # (スコア再計算と違い外部APIを叩かない)。
     if any(f in data for f in ("broker_fee_rate", "prepaid_rent_months", "misc_cost")):
         _refresh_initial_costs()
     return jsonify({"ok": True})

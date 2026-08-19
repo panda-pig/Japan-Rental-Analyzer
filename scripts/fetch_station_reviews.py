@@ -36,7 +36,7 @@ def main():
 
     ok = miss = 0
     for st in stations:
-        r = get_station_review(st)  # map は上で構築済み (二重構築しない)
+        r = get_station_review(st)
         if r:
             ok += 1
             print(f"  {st}: 交通{r['transport']} 治安{r['safety']} 買物{r['shopping']} "

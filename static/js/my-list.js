@@ -1,9 +1,7 @@
-// ===== 物件分析页：URL解析 + 单套报告 + 房源池(累积/点选/多选对比/收藏) =====
 
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const COLORS = { primary: '#56696E', good: '#527051', warn: '#8C6220', bad: '#9E4A46', text: '#6E6C63', muted: '#767366', border: '#E7E4DB',
   palette: ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0', '#A98089', '#5A8A82', '#6E7A82', '#B08A6E'] };
-// OS の「視差効果を減らす」設定時はグラフの登場アニメーションも止める
 const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const BASE_OPT = {
   animation: !REDUCE_MOTION,
@@ -16,24 +14,21 @@ const BASE_OPT = {
 const state = { data: null, selectedId: null, sort: 'score_desc' };
 const regionCache = {};
 
-// 既存インスタンスを使い回し、リサイズ時は resize() だけ呼ぶ (DOM 再構築しない)
 const chartRegistry = {};
 function initChart(el) {
   // render() が innerHTML を作り直すと旧インスタンスは孤立するので破棄しておく
   const prev = chartRegistry[el.id];
   if (prev && !prev.isDisposed() && prev.getDom() !== el) prev.dispose();
-  el.querySelector(':scope > .chart-empty')?.remove();   // 前回の「データなし」を消してから描く
+  el.querySelector(':scope > .chart-empty')?.remove();
   const c = echarts.getInstanceByDom(el) || echarts.init(el);
   chartRegistry[el.id] = c;
   return c;
 }
 
-// 描画しない時は骨組み(.chart:empty)が回り続けるので、必ず中身を入れて止める
 function chartEmpty(el, msg) {
   if (el) el.innerHTML = `<div class="chart-empty">${msg || 'データがありません'}</div>`;
 }
 
-// canvas はスクリーンリーダーには空。グラフを role=img + 要約テキストにして読めるようにする
 function chartA11y(el, label) {
   if (!el) return;
   el.setAttribute('role', 'img');
@@ -42,11 +37,9 @@ function chartA11y(el, label) {
 const yen = v => (v || 0).toLocaleString() + '円';
 
 // スクレイプ由来の文字列(物件名・エリア・駅名など)はそのまま innerHTML に入れない。
-// 物件ページ側の細工でスクリプトが混入しうるため、必ず esc() を通す。
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
 
-// href に入れてよいのは http(s) のみ (javascript: を弾く)
 function safeUrl(u) {
   try {
     const p = new URL(u, location.origin);
@@ -54,9 +47,6 @@ function safeUrl(u) {
   } catch (e) { return ''; }
 }
 
-// ---------- URL导入 ----------
-// #import-result は aria-live 領域。エラー時は入力欄に aria-invalid を立て、
-// スクリーンリーダーが結果を読み上げられるようにする。
 function setImportMsg(text, kind) {
   const el = document.getElementById('import-result');
   const input = document.getElementById('import-url');
@@ -77,7 +67,7 @@ async function importAndAnalyze() {
     document.getElementById('import-url').focus();
     return;
   }
-  if (btn && btn.disabled) return;  // 防止重复提交
+  if (btn && btn.disabled) return;
   if (btn) { btn.disabled = true; btn.textContent = '解析中…'; }
   setImportMsg('解析中… ページを取得しています(数秒かかります)', 'busy');
   try {
@@ -101,7 +91,7 @@ async function importAndAnalyze() {
     } else {
       setImportMsg(d.message || '解析しました', 'ok');
       document.getElementById('import-url').value = '';
-      if (d.id) state.selectedId = d.id;   // 新解析的这套优先显示
+      if (d.id) state.selectedId = d.id;
       await loadAnalysis();
     }
   } catch (e) {
@@ -111,13 +101,12 @@ async function importAndAnalyze() {
   }
 }
 
-// ---------- 轻量 toast(刷新/删除反馈) ----------
 function toast(msg, ok = true) {
   let el = document.getElementById('ml-toast');
   if (!el) {
     el = document.createElement('div');
     el.id = 'ml-toast';
-    el.setAttribute('role', 'status');       // 読み上げ対象にする
+    el.setAttribute('role', 'status');
     el.setAttribute('aria-live', 'polite');
     el.setAttribute('aria-atomic', 'true');
     el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(16,24,40,0.16);color:#fff;transition:opacity .3s;';
@@ -130,7 +119,6 @@ function toast(msg, ok = true) {
   el._t = setTimeout(() => { el.style.opacity = '0'; }, 3200);
 }
 
-// ---------- 数据加载 ----------
 async function loadAnalysis() {
   const container = document.getElementById('analysis-container');
   if (container && !state.data) {
@@ -173,7 +161,6 @@ function sortPool(rows) {
   return [...rows].sort(cmp);
 }
 
-// ---------- 主渲染 ----------
 async function render() {
   const container = document.getElementById('analysis-container');
   const d = state.data;
@@ -195,7 +182,6 @@ async function render() {
   wirePoolHandlers();
 }
 
-// ---------- 特徴クラウド(词云) ----------
 function wordCloudHtml(d) {
   if (!d.feature_cloud || !d.feature_cloud.length) return '';
   return `<div class="card">
@@ -210,56 +196,51 @@ function drawWordCloud(cloud) {
   if (!cloud || !cloud.length) { chartEmpty(el, '特徴データがありません'); return; }
   const vals = cloud.map(c => c.value);
   const min = Math.min(...vals), max = Math.max(...vals);
-  // canvas 描画は読み上げ不能なので、頻度順のテキストを代替として持たせる
   chartA11y(el, '設備・特徴の頻度を表すワードクラウド。多い順に' +
     [...cloud].sort((a, b) => b.value - a.value).map(c => `${c.name}${c.value}件`).join('、') + '。');
 
-  // 王道のワードクラウド: 強い字数コントラスト + 密な噛み合わせ + 一部縦組み
   if (typeof WordCloud === 'function') {
     el.innerHTML = '';
     const W = Math.max(el.clientWidth || 640, 320);
-    const H = Math.round(W * 0.56);            // 横長 (王道の比率)
+    const H = Math.round(W * 0.56);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
-    canvas.width = W * dpr; canvas.height = H * dpr;   // 高解像度で描画
+    canvas.width = W * dpr; canvas.height = H * dpr;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     canvas.style.display = 'block'; canvas.style.margin = '0 auto';
     el.style.height = 'auto';
     el.appendChild(canvas);
 
-    // 順位ベースの字数割当: 件数が横並びでも必ず階層が出る (最重要語ほど大きく)
     const sorted = [...cloud].sort((a, b) => b.value - a.value);
     const n = sorted.length;
-    // 語数が少ないほど1語を大きく。キャンバス幅にも追随
     const base = Math.min(W, 900);
     const MAXF = Math.max(24, Math.min(base / 13, base / Math.sqrt(n) * 0.42));
     const MINF = Math.max(11, MAXF * 0.30);
     const list = sorted.map((c, idx) => {
-      const rank = n === 1 ? 1 : 1 - idx / (n - 1);      // 1 → 0
+      const rank = n === 1 ? 1 : 1 - idx / (n - 1);
       const freq = max === min ? 1 : (c.value - min) / (max - min);
-      const t = 0.72 * rank + 0.28 * freq;               // 順位主体・件数で微調整
+      const t = 0.72 * rank + 0.28 * freq;
       return [c.name, Math.round(MINF + Math.pow(t, 0.85) * (MAXF - MINF))];
     });
 
     let i = 0;
     WordCloud(canvas, {
       list,
-      gridSize: Math.round(4 * dpr),          // 密に噛み合わせる
+      gridSize: Math.round(4 * dpr),
       weightFactor: w => w * dpr,
       fontFamily: 'Noto Sans JP, sans-serif',
       fontWeight: '700',
       color: () => COLORS.palette[(i++) % COLORS.palette.length],
       backgroundColor: 'transparent',
-      rotateRatio: 0.12,                      // 縦組みは少数のアクセントに留める
+      rotateRatio: 0.12,
       rotationSteps: 2, minRotation: -Math.PI / 2, maxRotation: -Math.PI / 2,
       shape: 'circle',
-      ellipticity: 0.62,                      // 横に広い楕円の塊 = 王道の雲形
+      ellipticity: 0.62,
       drawOutOfBound: false, shrinkToFit: true,
     });
     return;
   }
 
-  // 降级:HTML 标签云
   const size = v => max === min ? 26 : Math.round(16 + (v - min) / (max - min) * 32);
   const chips = cloud.map((c, i2) =>
     `<span title="${esc(c.name)}: ${c.value}件" style="font-family:${CHART_FONT};font-weight:700;font-size:${size(c.value)}px;color:${COLORS.palette[i2 % COLORS.palette.length]};line-height:1.1;white-space:nowrap;">${esc(c.name)}</span>`).join('');
@@ -267,7 +248,6 @@ function drawWordCloud(cloud) {
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 20px;padding:24px 8px;min-height:180px;">${chips}</div>`;
 }
 
-// ---------- 空状态：区域基准看板 ----------
 async function renderEmpty(container) {
   let d = null;
   try { d = await (await fetch('/api/dashboard')).json(); } catch (e) {}
@@ -324,11 +304,8 @@ function drawRegionBar(elId, rows) {
   });
 }
 
-// ---------- 单套报告 ----------
 function scoreColor(s) { return s >= 75 ? COLORS.good : s >= 60 ? COLORS.primary : s >= 45 ? COLORS.warn : COLORS.bad; }
-// スコアバッジの色分け (高=green / 中=indigo / 低=amber)
 function badgeCls(s) { return 'badge score' + (s == null ? '' : s >= 75 ? '' : s >= 60 ? ' mid' : ' low'); }
-// 掲載元ごとのバッジ色分け (athome を HOME より先に判定)
 function platformCls(p) {
   const s = String(p || '').toUpperCase();
   if (s.includes('ATHOME')) return 'p-athome';
@@ -349,7 +326,6 @@ function reportHtml(l, region) {
   const yen = v => (v || 0).toLocaleString() + '円';
   const dev = deviationOf(l);
 
-  // 月額指标卡:带偏差
   let rentLabel = '<div class="label">月額</div>';
   let rentCls = '';
   if (dev != null) {
@@ -372,7 +348,6 @@ function reportHtml(l, region) {
   const amenityChips = AMENITIES.map(([k, label]) =>
     l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}</span>`).join('');
 
-  // 条件クリア(希望条件の達成状況)— 前端で listing + prefs から判定, 全項目を対照表示
   const P = (state.data && state.data.prefs) || {};
   const ACHV = [
     ['予算内', !!(l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000))],
@@ -392,7 +367,6 @@ function reportHtml(l, region) {
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
       ${isFav ? '★ ' + esc(l.fav_status) : '☆ 気になる'}</button>`;
 
-  // 详细数据(2列),已在指标卡展示的不重复
   const detailRows = [
     ['家賃', yen(l.rent)], ['管理費', yen(l.management_fee)],
     ['間取り', esc(l.layout || '-')], ['階数', l.floor ? `${l.floor}階${l.total_floors ? ' / ' + l.total_floors + '階建' : ''}` : '-'],
@@ -428,7 +402,6 @@ function reportHtml(l, region) {
       </div>
     </div>`;
 
-  // エリア評価(0~100 展示分,独立卡片,不计入房源评分)
   if (region) {
     const sc = (score, label, level) => `<div class="metric"><div class="num" style="font-size:22px;color:${scoreColor(score ?? 50)};">${score ?? '-'}</div><div class="label">${label}${level ? ` (${level})` : ''}</div></div>`;
     const tradeMetric = region.trade_price_per_m2
@@ -454,7 +427,6 @@ function reportHtml(l, region) {
     </div>`;
   }
 
-  // 最寄駅の住民評価 (まちむすび, 表示専用)
   if (l.st_avg != null) {
     const starColor = v => v >= 4 ? COLORS.good : v >= 3.5 ? COLORS.primary : v >= 3 ? COLORS.warn : COLORS.bad;
     const stM = (v, label) => v == null ? '' :
@@ -479,7 +451,6 @@ function reportHtml(l, region) {
     html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;
     if (l.region_avg_rent && l.total_monthly_cost)
       html += `<div class="card"><h2>エリア平均との比較</h2><div id="chart-compare-bar" class="chart"></div></div>`;
-    // 价格推移(有 2+ 次取得历史时才显示)
     const hist = (state.data.price_history || []).filter(h => h.id === l.id);
     if (hist.length >= 2)
       html += `<div class="card"><h2>価格推移 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">再取得の履歴</span></h2><div id="chart-price-history" class="chart"></div></div>`;
@@ -489,7 +460,6 @@ function reportHtml(l, region) {
       </div></div>`;
   }
 
-  // 详细数据表(次要,放最后)
   html += `
     <div class="card">
       <h2>詳細データ</h2>
@@ -504,7 +474,6 @@ function reportHtml(l, region) {
 
 function drawReportCharts(l, region, prefs) {
   if (!l || l.total_score == null) {
-    // スコア未計算でも枠は出ているので、骨組みを止めて理由を出す
     ['chart-radar-single', 'chart-initcost', 'chart-compare-bar', 'chart-price-history']
       .forEach(id => chartEmpty(document.getElementById(id), 'スコア未計算です'));
     return;
@@ -537,7 +506,6 @@ function drawReportCharts(l, region, prefs) {
       }],
     });
   }
-  // 初期費用の内訳(甜甜圈)
   const iEl = document.getElementById('chart-initcost');
   if (iEl) {
     const p = prefs || { broker_fee_rate: 0.55, prepaid_rent_months: 1, misc_cost: 40000 };
@@ -586,7 +554,6 @@ function drawReportCharts(l, region, prefs) {
   } else {
     chartEmpty(bEl, 'エリア平均が取得できていません');
   }
-  // 价格推移折线
   const hEl = document.getElementById('chart-price-history');
   if (hEl) {
     const hist = (state.data.price_history || []).filter(h => h.id === l.id)
@@ -597,7 +564,7 @@ function drawReportCharts(l, region, prefs) {
         hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
     initChart(hEl).setOption({
       ...BASE_OPT,
-      grid: { left: 60, right: 24, top: 34, bottom: 40 },   // 軸名が切れないよう上に余白
+      grid: { left: 60, right: 24, top: 34, bottom: 40 },
       xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
       yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
       series: [{
@@ -611,7 +578,6 @@ function drawReportCharts(l, region, prefs) {
   }
 }
 
-// ---------- 单套操作(再取得 / 削除) ----------
 async function refreshListing(id) {
   const btn = document.getElementById('report-refresh');
   if (btn) { btn.disabled = true; btn.textContent = '取得中…'; }
@@ -634,7 +600,6 @@ async function deleteListing(id) {
   } catch (e) { toast('削除に失敗しました', false); }
 }
 
-// ---------- 房源池列表 ----------
 function poolHtml(pool, d) {
   const sortOptions = [
     ['score_desc', 'スコア高い順'], ['price_asc', '月額安い順'], ['area_desc', '面積広い順'],
@@ -719,7 +684,6 @@ function drawScatter(scatter) {
   initChart(el).setOption({
     ...BASE_OPT,
     tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.data.name}<br>${p.data.ward || ''}<br>面積 ${p.data.value[0]}㎡ / 月額 ${p.data.value[1].toLocaleString()}円` },
-    // top を軸名の nameGap より広く取らないと「月額(円)」が上端で切れる
     grid: { left: 60, right: 30, top: 34, bottom: 40 },
     xAxis: { type: 'value', name: '面積(㎡)', axisLabel: { color: COLORS.muted } },
     yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
@@ -732,7 +696,6 @@ function drawScatter(scatter) {
   });
 }
 
-// ---------- 交互 ----------
 function updateCompareBtn() {
   const checked = document.querySelectorAll('.pool-check:checked');
   const btn = document.getElementById('pool-compare');
@@ -754,7 +717,6 @@ async function toggleFav(id, favId) {
 }
 
 function wirePoolHandlers() {
-  // 行点击切换报告(排除 checkbox / 按钮 / 链接)
   document.querySelectorAll('.pool-row').forEach(tr => {
     const select = () => { state.selectedId = parseInt(tr.dataset.id, 10); render(); };
     tr.addEventListener('click', e => {
@@ -796,9 +758,6 @@ function wirePoolHandlers() {
   });
 }
 
-// ---------- 初始化 ----------
-// リサイズで DOM を作り直す必要はない。グラフの寸法合わせと、
-// 幅に合わせて敷き詰めるワードクラウドの再描画だけ行う。
 let _resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);

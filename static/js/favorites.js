@@ -15,7 +15,6 @@ const STATUS_CLASS = {
   "内見予定": "warn", "内見済み": "warn", "申込候補": "warn",
   "申込済み": "good", "見送り": "muted", "成約不可": "muted",
 };
-// 内見に関わるステータスだけ内見日入力を出す
 const VIEWING_STATUSES = new Set(["内見予定", "内見済み", "申込候補", "申込済み"]);
 
 function summary(data) {
@@ -76,7 +75,7 @@ async function updateField(id, field, value) {
     method: "PUT", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ [field]: value }),
   });
-  if (field === "status") load();  // 状态变了要重排/重算摘要
+  if (field === "status") load();
 }
 
 async function removeFav(id) {
