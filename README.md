@@ -1,129 +1,162 @@
+<div align="center">
+
 # Japan Rental Analyzer
 
-気になる賃貸物件の URL を貼り付けるだけで、物件解析・個人条件スコアリング・エリア相場比較・公的オープンデータ(取引価格/災害リスク)・駅の住民評価までを 1 枚のレポートにまとめる、意思決定支援ツール。
+**Paste a listing URL. Get rent, hazard risk and neighbourhood reviews in one report.**
 
-物件詳細・問い合わせ・申込は各掲載元サイトで行う設計(本ツールは分析に特化)。
+Tokyo · Yokohama · Kawasaki rental decision tool
 
-## スクリーンショット
+**English** · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
 
-**物件分析レポート** — URL を貼るだけで、スコア・エリア偏差・公的データ・駅の住民評価まで 1 枚に:
+</div>
 
-![物件分析レポート](screenshots/report.png)
+![Home](screenshots/hero.png)
 
-**エリアデータ** — 狙い目エリアマップ (相場 × 総合評価) と相場ランキング:
+<sub>Screenshots use sample listings. Area rents, transaction prices and hazard levels are real.</sub>
 
-![エリアデータ](screenshots/area.png)
+---
 
-**物件プール / 比較**:
+Apartment hunting in Japan means opening the same listing on four different
+sites, then guessing whether the rent is fair, whether the area floods, and
+what it is actually like to live near that station. This tool answers all
+three from a single pasted URL.
 
-| 物件プール | 8次元レーダー比較 |
-|---|---|
-| ![物件プール](screenshots/pool.png) | ![比較](screenshots/compare.png) |
+## Features
 
-## できること
+### 1. Paste a URL, get a full report
 
-**1. 単件分析 — URL を貼るだけ**
-- SUUMO / LIFULL HOME'S / athome / Yahoo!不動産 の物件詳細ページを自動解析
-  (賃料・管理費・敷金礼金・面積・間取り・階数・築年数・駅徒歩・設備)
-- 個人条件による **8次元スコア** (予算/面積/通勤/階数/ペット/駅距離/築年数/初期費用, 重み付き正規化 0-100)
-- **エリア相場との偏差** (±何円・何%か一目で分かる)
-- **初期費用の内訳ドーナツ** (敷金/礼金/仲介手数料/前家賃/諸費用の概算)
-- **価格履歴** (再取得で価格変動を折れ線で追跡)
+Works with SUUMO, LIFULL HOME'S, athome and Yahoo! Real Estate listing pages.
+The parser pulls rent, management fee, deposit, key money, size, layout,
+floor, building age, walking minutes and amenities.
 
-**2. 公的データ・住民評価 (表示専用・スコア対象外)**
-- **取引価格**: 国土交通省 不動産情報ライブラリ API から関東48区の中古マンション
-  ㎡単価中央値 + 取引件数 (直近4四半期)
-- **災害リスク**: 洪水浸水想定(想定最大規模)の最大浸水深 + 土砂災害警戒区域数
-  から 低/中/高 の目安を表示 (区役所周辺の参考値)
-- **駅の住民評価**: LIFULL HOME'S「まちむすび」の住民アンケート集計値
-  (交通/治安/買い物/子育て/自然, 5点満点) を最寄駅ごとに表示
+![Report](screenshots/report.png)
 
-**3. 物件プール — 貼るほど貯まる**
-- 貼り付けた物件が自動でプールに蓄積 (行クリックでレポート切替)
-- **コスパ散布図** (面積×月額+エリア平均線) / **間取り分布** / **特徴ワードクラウド** (家の形)
-- チェックで 2〜4 件を選び **8次元レーダー重ね合わせ + 横断比較表**
-- お気に入り + 検討ステータス管理 (気になる→内見→申込…の進捗ボード)
+- **8-dimension score** — budget, size, commute, floor, pets, station
+  distance, building age and upfront cost, each weighted by your own
+  preferences and normalised to 0–100
+- **Deviation from the area average** — how many yen and what percent above
+  or below the local rate
+- **Upfront cost breakdown** — deposit, key money, agency fee, prepaid rent
+  and fixed extras as a donut
+- **Condition checklist** — which of your eight criteria the listing meets,
+  with the misses greyed out rather than hidden
+- **Price history** — refresh a listing and the change is tracked on a line
 
-**4. エリアデータ (物件ゼロでも使える)**
-- 狙い目エリアマップ (相場 × 総合評価の散布図)
-- 東京23区/横浜の相場ランキング・エリア比較レーダー・全48区ソート可能テーブル
+### 2. Public data and resident reviews
 
-## データソースと出典
+Shown alongside the listing, deliberately **excluded from the score** — these
+describe the area, not the property.
 
-| データ | 出典 | 取得方法 |
+- **Transaction prices** — median price per m² and transaction count for
+  second-hand condominiums, from the MLIT Real Estate Information Library
+  (48 Kanto wards, last four quarters)
+- **Hazard risk** — maximum expected flood depth plus the number of landslide
+  warning zones, summarised as low / mid / high
+- **Station reviews** — resident survey scores from LIFULL HOME'S Machimusubi
+  (transport, safety, shopping, childcare, nature) for the nearest station
+
+### 3. A pool that fills up as you paste
+
+![Pool](screenshots/pool.png)
+
+Every listing you analyse stays in the pool. Click a row to switch the report
+above. Sort by score, rent, size, price per m² or deviation from the area
+rate. Check two to four and compare them side by side.
+
+![Compare](screenshots/compare.png)
+
+The comparison overlays the eight-dimension radars and lines up every field in
+a table. Values that were never captured read as 未取得 rather than being
+silently shown as zero.
+
+### 4. Favourites and progress
+
+![Favourites](screenshots/favorites.png)
+
+Star a listing and track it through 気になる → 内見 → 申込, with notes.
+
+### 5. Area data, useful before you have any listings
+
+![Area](screenshots/area.png)
+
+A value map plotting rent against overall rating — top-left is cheap and
+well-rated — plus rent rankings for the 23 Tokyo wards and Yokohama, a radar
+to compare two areas, and a sortable table of all 56 areas.
+
+## Data sources
+
+| Data | Source | How it is fetched |
 |---|---|---|
-| 物件情報 | ユーザーが貼った詳細ページのみ | 単発取得 (一括クロールなし) |
-| エリア平均賃料 | SUUMO 家賃相場ページ | 低頻度・手動シード |
-| 不動産取引価格 | 国土交通省 不動産情報ライブラリ (XIT001) | 公式 API (要 API キー) |
-| 災害リスク | 同上 (XKT026 洪水 / XKT029 土砂) | 公式 API タイル |
-| 駅の住民評価 | LIFULL HOME'S まちむすび | 集計スコアのみ・口コミ本文は保存しない |
+| Listing details | Only pages the user pastes | One page at a time, no crawling |
+| Area average rent | SUUMO rent statistics | Low frequency, seeded manually |
+| Transaction prices | MLIT Real Estate Information Library (XIT001) | Official API (key required) |
+| Hazard risk | Same library (XKT026 flood / XKT029 landslide) | Official API tiles |
+| Station reviews | LIFULL HOME'S Machimusubi | Aggregate scores only, never review text |
 
-## 技術スタック
+## Tech stack
 
-| レイヤー | 技術 |
+| Layer | Choice |
 |---|---|
-| バックエンド | Python 3.14 / Flask (単一アプリ) |
-| データベース | SQLite (11テーブル: 物件/スコア/状態/価格履歴/エリア/公的データ/駅評価 ほか) |
-| スクレイピング | requests / BeautifulSoup4 (robots.txt 遵守・礼儀スリープ) |
-| 公的データ | 不動産情報ライブラリ API + XYZ タイル座標計算 |
-| 駅名照合 | pykakasi (漢字→ローマ字) + 正規化 + 近似マッチ |
-| 通勤計算 | NAVITIME Transfer API (オプション) |
-| フロントエンド | Jinja2 / Vanilla JS / ECharts 5 / wordcloud2.js |
-| テスト | pytest (74テスト) |
+| Backend | Python 3.14 / Flask |
+| Database | SQLite, 11 tables |
+| Scraping | requests / BeautifulSoup4, robots.txt respected, polite sleep |
+| Public data | Real Estate Information Library API + XYZ tile maths |
+| Station matching | pykakasi (kanji → romaji) with normalisation and fuzzy matching |
+| Commute | NAVITIME Transfer API (optional) |
+| Frontend | Jinja2 / vanilla JS / ECharts 5 / wordcloud2.js |
+| Tests | pytest, 98 tests |
 
-## セットアップ
+Fetch targets are restricted to an allow-list matched on the parsed hostname,
+private addresses are refused and redirects are re-checked at every hop.
+Scraped text is escaped before it reaches the DOM. Destructive and
+configuration endpoints require `ADMIN_TOKEN` when it is set.
+
+The interface targets WCAG 2.1 AA: keyboard-operable tables, text
+alternatives for every chart, live regions for form results, AA contrast, 44px
+touch targets and `prefers-reduced-motion` support.
+
+## Setup
 
 ```bash
-# 1. 仮想環境 + 依存
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 
-# 2. 環境変数 (任意)
 cp .env.example .env
-#   REINFOLIB_API_KEY : 不動産情報ライブラリ (取引価格/災害。無くても動作)
-#   NAVITIME_CLIENT_KEY: 通勤時間 (無ければ通勤スコアは自動除外)
+#   REINFOLIB_API_KEY   : Real Estate Information Library (optional)
+#   NAVITIME_CLIENT_KEY : commute time (without it the commute axis is skipped)
+#   ADMIN_TOKEN         : required for destructive routes when set
 
-# 3. DB 初期化 + エリア相場シード
 python scripts/init_db.py
 python scripts/seed_regions.py
+python scripts/fetch_public_data.py   # only with REINFOLIB_API_KEY
 
-# 4. 公的データ (REINFOLIB_API_KEY がある場合)
-python scripts/fetch_public_data.py      # 取引価格 + 災害 (四半期ごとに再実行)
-
-# 5. 起動
 python app.py    # http://127.0.0.1:5000
 ```
-
-## 使い方
-
-1. **物件分析** ページで気になる物件の URL を貼り付けて「解析」
-2. レポートで スコア/偏差/初期費用/エリア評価/駅住民評価 を確認
-3. 何件か貯まったらプールでソート・チェックして「選択して比較」
-4. 気に入ったら ★ でお気に入り登録 → **お気に入り** ページで検討進捗を管理
-5. 駅の住民評価は貼り付け時に自動取得。まとめて取り直す場合:
-   `python scripts/fetch_station_reviews.py`
-
-## テスト
 
 ```bash
 .venv/bin/pytest tests/ -q
 ```
 
-## Render デプロイ
+## Deploying to Render
 
-1. New → Web Service → この GitHub リポジトリを接続
-2. Build: `pip install -r requirements.txt` / Start: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`
-3. Persistent Disk 1GB, Mount Path `db`
-4. 環境変数: `DB_PATH=/opt/render/project/src/db/database.db`, `REINFOLIB_API_KEY=...`
-5. デプロイ後に Shell で一度:
+1. New → Web Service → connect this repository
+2. Build `pip install -r requirements.txt`,
+   start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`
+3. Persistent disk 1 GB mounted at `db`
+4. Environment: `DB_PATH=/opt/render/project/src/db/database.db`,
+   `REINFOLIB_API_KEY`, `ADMIN_TOKEN`
+5. Once, from the shell:
    `python scripts/fetch_public_data.py && python scripts/fetch_station_reviews.py`
 
-## コンプライアンス方針
+## Compliance
 
-- 解析するのはユーザーが明示的に貼った物件ページのみ。サイト横断クロールはしない
-- 各取得の前に robots.txt を確認し、Disallow はスキップ。リクエスト間に礼儀スリープ
-- CAPTCHA 等の bot 対策は迂回しない (bot 対策が確認されたソースは採用しない)
-- 住民評価は集計数値のみ保存し、口コミ本文・個人情報は保存しない
-- 公的データ・住民評価は出典を UI に明示し、物件スコアには算入しない (表示専用)
-- 個人の学習・意思決定支援が目的。データの商用再配布はしない
+- Only pages the user explicitly pastes are parsed. There is no cross-site crawl.
+- robots.txt is checked before each fetch and Disallow is honoured, with a
+  polite sleep between requests.
+- CAPTCHAs and other bot defences are never bypassed; sources that use them
+  are not supported.
+- Only aggregate review scores are stored — never review text or personal data.
+- Public data and resident reviews are attributed in the UI and excluded from
+  the property score.
+- Built for personal research. The data is not redistributed commercially.
