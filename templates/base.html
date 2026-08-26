@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/style.css?v={{ asset_v }}">
+<link rel="stylesheet" href="/static/css/style.css?v={{ asset_v() }}">
 
 {% block libs %}{% endblock %}
 </head>
@@ -30,6 +30,6 @@
 <main class="container" id="main">
 {% block content %}{% endblock %}
 </main>
-<script defer src="/static/js/{% block js %}{% endblock %}?v={{ asset_v }}"></script>
+<script defer src="/static/js/{% block js %}{% endblock %}?v={{ asset_v() }}"></script>
 </body>
 </html>

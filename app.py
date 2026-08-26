@@ -61,8 +61,16 @@ def _asset_stamp():
     return int(newest)
 
 
-ASSET_V = _asset_stamp()
-app.jinja_env.globals["asset_v"] = ASSET_V
+_ASSET_V = _asset_stamp()
+
+
+def asset_v():
+    # 本番は起動時の値で十分(デプロイで再起動する)。開発中は JS/CSS を書き換えても
+    # リローダが走らず、1年キャッシュされた古い版が残るので毎回見に行く。
+    return _asset_stamp() if app.debug else _ASSET_V
+
+
+app.jinja_env.globals["asset_v"] = asset_v
 
 
 # ADMIN_TOKEN を設定した環境でのみ要求する(未設定ならローカル開発として素通し)。
@@ -596,11 +604,16 @@ def api_status():
             JOIN rental_listings l ON st.listing_id=l.id
             LEFT JOIN listing_scores s ON s.listing_id=l.id
             ORDER BY st.updated_at DESC"""))
-    data = request.json
+    data = request.json or {}
+    listing_id = data.get("listing_id")
+    if listing_id is None:
+        return jsonify({"error": "listing_id is required"}), 400
+    if not query_one("SELECT id FROM rental_listings WHERE id=?", (listing_id,)):
+        return jsonify({"error": "listing not found"}), 404
     sid = execute("""INSERT INTO listing_status
         (listing_id, status, priority, memo, contacted)
         VALUES (?,?,?,?,?)""",
-        (data["listing_id"], data.get("status"), data.get("priority"),
+        (listing_id, data.get("status"), data.get("priority"),
          data.get("memo"), data.get("contacted", 0)))
     return jsonify({"id": sid}), 201
 
@@ -775,7 +788,10 @@ def api_sources():
 
 @app.route("/api/sources", methods=["POST"])
 def api_source_create():
-    data = request.json
+    data = request.json or {}
+    missing = [f for f in ("name", "platform", "source_url") if not data.get(f)]
+    if missing:
+        return jsonify({"error": f"missing fields: {', '.join(missing)}"}), 400
     sid = execute("INSERT INTO source_configs (name, platform, source_url, max_pages) VALUES (?,?,?,?)",
                   (data["name"], data["platform"], data["source_url"], data.get("max_pages", 2)))
     return jsonify({"id": sid}), 201
@@ -786,7 +802,10 @@ def api_source_modify(sid):
     if request.method == "DELETE":
         execute("DELETE FROM source_configs WHERE id=?", (sid,))
         return jsonify({"ok": True})
-    data = request.json
+    data = request.json or {}
+    missing = [f for f in ("name", "platform", "source_url") if not data.get(f)]
+    if missing:
+        return jsonify({"error": f"missing fields: {', '.join(missing)}"}), 400
     execute("UPDATE source_configs SET name=?, platform=?, source_url=?, max_pages=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (data["name"], data["platform"], data["source_url"], data.get("max_pages", 2), sid))
     return jsonify({"ok": True})

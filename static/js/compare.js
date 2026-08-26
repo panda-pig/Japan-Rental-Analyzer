@@ -84,7 +84,8 @@ async function load() {
       const v = l[key];
       let cell;
       if (["total_monthly_cost", "rent", "management_fee", "initial_cost_estimate", "deposit", "key_money"].includes(key))
-        cell = esc((v || 0).toLocaleString() + '円');
+        // 未取得(null)を 0円 と書くと「初期費用ゼロ」に見えてしまう。実際の 0 とは区別する。
+        cell = v == null ? '<span class="tag muted">未取得</span>' : esc(v.toLocaleString() + '円');
       else if (key === "total_score" && v != null)
         cell = `<span class="badge score${v >= 75 ? '' : v >= 60 ? ' mid' : ' low'}">${esc(v)}</span>`;
       else if (key === "pet_allowed")

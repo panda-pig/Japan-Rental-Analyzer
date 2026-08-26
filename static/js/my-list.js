@@ -35,6 +35,7 @@ function chartA11y(el, label) {
   el.setAttribute('aria-label', label);
 }
 const yen = v => (v || 0).toLocaleString() + '円';
+const unit = u => `<span style="font-size:14px;">${u}</span>`;
 
 // スクレイプ由来の文字列(物件名・エリア・駅名など)はそのまま innerHTML に入れない。
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -339,10 +340,10 @@ function reportHtml(l, region) {
   const metrics = `
     <div class="metric-grid" style="margin:16px 0 4px;">
       <div class="metric"><div class="num">${l.total_score ?? '-'}</div><div class="label">総合スコア /100</div></div>
-      <div class="metric ${rentCls}"><div class="num">${(l.total_monthly_cost || 0).toLocaleString()}<span style="font-size:14px;">円</span></div>${rentLabel}</div>
-      <div class="metric"><div class="num">${l.area_m2 || '?'}<span style="font-size:14px;">㎡</span></div><div class="label">${areaLabel}</div></div>
-      <div class="metric"><div class="num">${l.price_per_m2 ? Math.round(l.price_per_m2).toLocaleString() : '-'}<span style="font-size:14px;">円</span></div><div class="label">㎡単価</div></div>
-      <div class="metric"><div class="num">${l.initial_cost_estimate ? (l.initial_cost_estimate / 10000).toFixed(1) : '-'}<span style="font-size:14px;">万円</span></div><div class="label">初期費用(概算)</div></div>
+      <div class="metric ${rentCls}"><div class="num">${l.total_monthly_cost != null ? l.total_monthly_cost.toLocaleString() + unit('円') : '-'}</div>${rentLabel}</div>
+      <div class="metric"><div class="num">${l.area_m2 != null ? l.area_m2 + unit('㎡') : '-'}</div><div class="label">${areaLabel}</div></div>
+      <div class="metric"><div class="num">${l.price_per_m2 ? Math.round(l.price_per_m2).toLocaleString() + unit('円') : '-'}</div><div class="label">㎡単価</div></div>
+      <div class="metric"><div class="num">${l.initial_cost_estimate ? (l.initial_cost_estimate / 10000).toFixed(1) + unit('万円') : '-'}</div><div class="label">初期費用(概算)</div></div>
     </div>`;
 
   const amenityChips = AMENITIES.map(([k, label]) =>
@@ -403,7 +404,11 @@ function reportHtml(l, region) {
     </div>`;
 
   if (region) {
-    const sc = (score, label, level) => `<div class="metric"><div class="num" style="font-size:22px;color:${scoreColor(score ?? 50)};">${score ?? '-'}</div><div class="label">${label}${level ? ` (${level})` : ''}</div></div>`;
+    const sc = (score, label) => `<div class="metric"><div class="num" style="font-size:22px;color:${scoreColor(score ?? 50)};">${score ?? '-'}</div><div class="label">${label}</div></div>`;
+    const lv = (level, label) => {
+      const c = level === '高' ? COLORS.good : level === '中' ? COLORS.warn : level ? COLORS.bad : COLORS.muted;
+      return `<div class="metric"><div class="num" style="font-size:22px;color:${c};">${level || '-'}</div><div class="label">${label}</div></div>`;
+    };
     const tradeMetric = region.trade_price_per_m2
       ? `<div class="metric"><div class="num" style="font-size:22px;">${(region.trade_price_per_m2 / 10000).toFixed(0)}<span style="font-size:13px;">万/㎡</span></div><div class="label">取引価格 (中古M・${region.trade_count}件)</div></div>`
       : '';
@@ -417,9 +422,9 @@ function reportHtml(l, region) {
       <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
       <div class="metric-grid" style="margin-top:12px;">
         ${sc(region.overall_score, '総合評価')}
-        ${sc(region.safety_score, '治安', region.safety_level)}
-        ${sc(region.convenience_score, '便利', region.convenience_level)}
-        ${sc(region.environment_score, '住環境', region.environment_level)}
+        ${lv(region.safety_level, '治安')}
+        ${lv(region.convenience_level, '便利')}
+        ${lv(region.environment_level, '住環境')}
         ${tradeMetric}
         ${hazardMetric}
       </div>
