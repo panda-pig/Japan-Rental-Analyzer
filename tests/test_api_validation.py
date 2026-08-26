@@ -24,16 +24,6 @@ def test_status_rejects_unknown_listing(client):
     assert r.status_code == 404
 
 
-def test_source_create_requires_fields(client):
-    r = client.post("/api/sources", json={})
-    assert r.status_code == 400
-
-
-def test_source_update_requires_fields(client):
-    r = client.put("/api/sources/1", json={})
-    assert r.status_code == 400
-
-
 def test_preferences_keeps_fields_not_sent(client):
     from db_helper import query_one, execute
     execute("UPDATE user_preferences SET require_pet_allowed=1, ideal_walk_minutes=7 WHERE id=1")
@@ -44,3 +34,18 @@ def test_preferences_keeps_fields_not_sent(client):
     assert p["max_walk_minutes"] == 12
     execute("UPDATE user_preferences SET require_pet_allowed=NULL, "
             "ideal_walk_minutes=NULL, max_walk_minutes=15 WHERE id=1")
+
+
+def test_removed_v1_routes_are_gone(client):
+    """CSV取込・一括抓取・source管理はUIごと廃止(一括抓取は run_scrape.py に残る)。"""
+    for method, path in [("post", "/api/import/csv"), ("post", "/api/scrape"),
+                         ("get", "/api/sources"), ("post", "/api/sources"),
+                         ("get", "/api/listings"), ("get", "/api/rankings"),
+                         ("get", "/import")]:
+        assert getattr(client, method)(path).status_code == 404, path
+
+
+def test_live_routes_still_answer(client):
+    for path in ["/", "/my-list", "/favorites", "/compare", "/settings",
+                 "/api/dashboard", "/api/my-list", "/api/preferences"]:
+        assert client.get(path).status_code == 200, path

@@ -130,6 +130,11 @@ python app.py    # http://127.0.0.1:5000
 .venv/bin/pytest tests/ -q
 ```
 
+一括抓取はコマンドラインで行います（HTTPエンドポイントはありません）。
+`python scripts/run_scrape.py` が `source_configs` の行を読んで実行します。
+`ADMIN_TOKEN` を設定している場合、画面は最初の破壊的操作で一度だけ
+トークンを尋ね、ブラウザに記憶します。
+
 ## Render デプロイ
 
 1. New → Web Service → このリポジトリを接続

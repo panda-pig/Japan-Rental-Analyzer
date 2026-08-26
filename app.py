@@ -78,8 +78,6 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 _PROTECTED = (
     ("POST", "/api/pool/clear"),
-    ("POST", "/api/import/csv"),
-    ("POST", "/api/scrape"),
     ("POST", "/api/scores/recalculate"),
     ("PUT", "/api/preferences"),
 )
@@ -89,11 +87,7 @@ def _needs_admin():
     p, m = request.path, request.method
     if (m, p) in _PROTECTED:
         return True
-    if m == "DELETE" and p.startswith("/api/listings/"):
-        return True
-    if p.startswith("/api/sources") and m in ("POST", "PUT", "DELETE"):
-        return True
-    return False
+    return m == "DELETE" and p.startswith("/api/listings/")
 
 
 @app.before_request
@@ -210,13 +204,6 @@ def page_favorites():
 @app.route("/compare")
 def page_compare():
     return render_template("compare.html")
-
-
-@app.route("/import")
-def page_import():
-    return render_template("import.html")
-
-
 @app.route("/settings")
 def page_settings():
     return render_template("settings.html")
@@ -488,72 +475,6 @@ def api_my_list():
             "ideal_area_m2": pref["ideal_area_m2"] if pref else 40,
         },
     })
-
-
-@app.route("/api/listings")
-def api_listings():
-    args = request.args
-    sql = """SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
-             s.commute_minutes AS score_commute_minutes,
-             st.status AS fav_status
-             FROM rental_listings l
-             LEFT JOIN listing_scores s ON s.listing_id=l.id
-             LEFT JOIN listing_status st ON st.listing_id=l.id
-             WHERE l.is_active=1"""
-    clauses = []
-    params = []
-    if args.get("max_total_cost"):
-        clauses.append("l.total_monthly_cost <= ?")
-        params.append(int(args["max_total_cost"]))
-    if args.get("min_area"):
-        clauses.append("l.area_m2 >= ?")
-        params.append(float(args["min_area"]))
-    if args.get("min_floor"):
-        clauses.append("l.floor >= ?")
-        params.append(int(args["min_floor"]))
-    if args.get("pet_allowed") == "1":
-        clauses.append("l.pet_allowed = 1")
-    if args.get("max_walk_minutes"):
-        clauses.append("l.walk_minutes <= ?")
-        params.append(int(args["max_walk_minutes"]))
-    if args.get("max_building_age"):
-        clauses.append("l.building_age <= ?")
-        params.append(int(args["max_building_age"]))
-    if args.get("layout"):
-        layouts = args["layout"].split(",")
-        clauses.append("l.layout IN (%s)" % ",".join("?" * len(layouts)))
-        params.extend(layouts)
-    if args.get("platform"):
-        plats = args["platform"].split(",")
-        clauses.append("l.platform IN (%s)" % ",".join("?" * len(plats)))
-        params.extend(plats)
-    if args.get("ward"):
-        wards = args["ward"].split(",")
-        clauses.append("l.ward IN (%s)" % ",".join("?" * len(wards)))
-        params.extend(wards)
-    if args.get("min_score"):
-        clauses.append("s.total_score >= ?")
-        params.append(int(args["min_score"]))
-    if args.get("status"):
-        clauses.append("st.status = ?")
-        params.append(args["status"])
-    if clauses:
-        sql += " AND " + " AND ".join(clauses)
-
-    sort_map = {
-        "score_desc": "s.total_score DESC",
-        "price_asc": "l.total_monthly_cost ASC",
-        "area_desc": "l.area_m2 DESC",
-        "walk_asc": "l.walk_minutes ASC",
-        "age_asc": "l.building_age ASC",
-        "newest": "l.first_seen_at DESC",
-        "price_per_m2_asc": "l.price_per_m2 ASC",
-        "initial_cost_asc": "l.initial_cost_estimate ASC",
-    }
-    sql += " ORDER BY " + sort_map.get(args.get("sort", "score_desc"), sort_map["score_desc"])
-    return jsonify(query_all(sql, params))
-
-
 @app.route("/api/listings/<int:lid>", methods=["GET", "DELETE"])
 def api_listing_detail(lid):
     if request.method == "DELETE":
@@ -575,26 +496,6 @@ def api_listing_detail(lid):
     if not row:
         return jsonify({"error": "not found"}), 404
     return jsonify(row)
-
-
-@app.route("/api/rankings")
-def api_rankings():
-    limit = int(request.args.get("limit", 20))
-    min_score = request.args.get("min_score")
-    sql = """SELECT l.id, l.title, l.platform, l.ward, l.total_monthly_cost,
-        l.area_m2, l.layout, l.floor, l.pet_allowed, l.detail_url,
-        s.total_score, s.score_reason
-        FROM listing_scores s JOIN rental_listings l ON s.listing_id=l.id
-        WHERE l.is_active=1"""
-    params = []
-    if min_score:
-        sql += " AND s.total_score >= ?"
-        params.append(int(min_score))
-    sql += " ORDER BY s.total_score DESC LIMIT ?"
-    params.append(limit)
-    return jsonify(query_all(sql, params))
-
-
 @app.route("/api/status", methods=["GET", "POST"])
 def api_status():
     if request.method == "GET":
@@ -660,14 +561,6 @@ def api_pool_clear():
         conn.execute("DELETE FROM listing_scores")
         conn.execute("DELETE FROM rental_listings")
     return jsonify({"ok": True, "deleted": n})
-
-
-@app.route("/api/import/csv", methods=["POST"])
-def api_import_csv():
-    return jsonify({"total_rows": 0, "inserted_count": 0, "updated_count": 0,
-                    "duplicate_count": 0, "error_count": 0, "message": "csv import optional"})
-
-
 @app.route("/api/import/detail", methods=["POST"])
 def api_import_detail():
     """粘贴单个房源详情页 URL,自动解析入库 + 评分。支持4平台。"""
@@ -769,48 +662,6 @@ def api_listing_refresh(lid):
         "price_changed": price_changed,
         "message": f"「{raw.title}」を更新しました" + (f" 価格変動: {old_cost}→{new_cost}円" if price_changed else " 価格変動なし"),
     })
-
-
-@app.route("/api/scrape", methods=["POST"])
-def api_scrape():
-    from scripts.run_scrape import run_scrape
-    data = request.json or {}
-    source_ids = data.get("source_ids")
-    run_scrape(source_ids)
-    log = query_all("SELECT * FROM import_logs ORDER BY id DESC LIMIT 1")
-    return jsonify(log[0] if log else {})
-
-
-@app.route("/api/sources")
-def api_sources():
-    return jsonify(query_all("SELECT * FROM source_configs ORDER BY id"))
-
-
-@app.route("/api/sources", methods=["POST"])
-def api_source_create():
-    data = request.json or {}
-    missing = [f for f in ("name", "platform", "source_url") if not data.get(f)]
-    if missing:
-        return jsonify({"error": f"missing fields: {', '.join(missing)}"}), 400
-    sid = execute("INSERT INTO source_configs (name, platform, source_url, max_pages) VALUES (?,?,?,?)",
-                  (data["name"], data["platform"], data["source_url"], data.get("max_pages", 2)))
-    return jsonify({"id": sid}), 201
-
-
-@app.route("/api/sources/<int:sid>", methods=["PUT", "DELETE"])
-def api_source_modify(sid):
-    if request.method == "DELETE":
-        execute("DELETE FROM source_configs WHERE id=?", (sid,))
-        return jsonify({"ok": True})
-    data = request.json or {}
-    missing = [f for f in ("name", "platform", "source_url") if not data.get(f)]
-    if missing:
-        return jsonify({"error": f"missing fields: {', '.join(missing)}"}), 400
-    execute("UPDATE source_configs SET name=?, platform=?, source_url=?, max_pages=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (data["name"], data["platform"], data["source_url"], data.get("max_pages", 2), sid))
-    return jsonify({"ok": True})
-
-
 @app.route("/api/preferences")
 def api_preferences():
     return jsonify(query_one("SELECT * FROM user_preferences WHERE id=1"))

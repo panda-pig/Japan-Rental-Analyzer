@@ -11,6 +11,24 @@ const BASE_OPT = {
     extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;' },
 };
 
+// 破壊的な操作は ADMIN_TOKEN を設定した環境ではトークンを要求される。
+// 401 が返ったら一度だけ入力を求め、通ったら localStorage に覚える。
+const ADMIN_KEY = 'adminToken';
+async function adminFetch(url, opts = {}) {
+  const send = t => fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(t ? { 'X-Admin-Token': t } : {}) },
+  });
+  let res = await send(localStorage.getItem(ADMIN_KEY) || '');
+  if (res.status !== 401) return res;
+  const token = window.prompt('この操作には管理トークンが必要です。');
+  if (!token) return res;
+  res = await send(token);
+  if (res.ok) localStorage.setItem(ADMIN_KEY, token);
+  else localStorage.removeItem(ADMIN_KEY);
+  return res;
+}
+
 const state = { data: null, selectedId: null, sort: 'score_desc' };
 const regionCache = {};
 
@@ -598,7 +616,8 @@ async function refreshListing(id) {
 async function deleteListing(id) {
   if (!confirm('この物件をプールから削除しますか?(元に戻せません)')) return;
   try {
-    await fetch('/api/listings/' + id, { method: 'DELETE' });
+    const res = await adminFetch('/api/listings/' + id, { method: 'DELETE' });
+    if (!res.ok) { toast('削除に失敗しました', false); return; }
     if (state.selectedId === id) state.selectedId = null;
     toast('削除しました');
     await loadAnalysis();
@@ -757,7 +776,8 @@ function wirePoolHandlers() {
   if (clearBtn) clearBtn.addEventListener('click', async () => {
     const n = (state.data && state.data.total) || 0;
     if (!confirm(`物件プールの ${n} 件を全て削除します。よろしいですか?(元に戻せません)`)) return;
-    await fetch('/api/pool/clear', { method: 'POST' });
+    const res = await adminFetch('/api/pool/clear', { method: 'POST' });
+    if (!res.ok) { toast('クリアに失敗しました', false); return; }
     state.selectedId = null;
     await loadAnalysis();
   });

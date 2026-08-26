@@ -138,6 +138,11 @@ python app.py    # http://127.0.0.1:5000
 .venv/bin/pytest tests/ -q
 ```
 
+Batch scraping is a command-line job, not a route:
+`python scripts/run_scrape.py` works off the rows in `source_configs`.
+When `ADMIN_TOKEN` is set, the pages ask for it once on the first
+destructive action and remember it in the browser.
+
 ## Deploying to Render
 
 1. New → Web Service → connect this repository

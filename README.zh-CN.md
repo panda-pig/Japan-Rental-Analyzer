@@ -125,6 +125,11 @@ python app.py    # http://127.0.0.1:5000
 .venv/bin/pytest tests/ -q
 ```
 
+批量抓取走命令行，没有对应的 HTTP 接口：
+`python scripts/run_scrape.py` 读取 `source_configs` 表中的配置执行。
+设置了 `ADMIN_TOKEN` 时，页面会在第一次破坏性操作时询问一次令牌，
+并记在浏览器里。
+
 ## 部署到 Render
 
 1. New → Web Service → 关联本仓库

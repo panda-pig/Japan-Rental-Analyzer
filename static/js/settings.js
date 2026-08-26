@@ -1,3 +1,21 @@
+// 破壊的な操作は ADMIN_TOKEN を設定した環境ではトークンを要求される。
+// 401 が返ったら一度だけ入力を求め、通ったら localStorage に覚える。
+const ADMIN_KEY = 'adminToken';
+async function adminFetch(url, opts = {}) {
+  const send = t => fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(t ? { 'X-Admin-Token': t } : {}) },
+  });
+  let res = await send(localStorage.getItem(ADMIN_KEY) || '');
+  if (res.status !== 401) return res;
+  const token = window.prompt('この操作には管理トークンが必要です。');
+  if (!token) return res;
+  res = await send(token);
+  if (res.ok) localStorage.setItem(ADMIN_KEY, token);
+  else localStorage.removeItem(ADMIN_KEY);
+  return res;
+}
+
 const WEIGHT_FIELDS = [["budget_weight", "予算"], ["area_weight", "面積"], ["commute_weight", "通勤"],
   ["floor_weight", "階数"], ["pet_weight", "ペット"], ["station_weight", "駅距離"],
   ["age_weight", "築年数"], ["initial_cost_weight", "初期費用"]];
@@ -50,19 +68,21 @@ function collect() {
 }
 
 async function persist() {
-  await fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collect()) });
+  const res = await adminFetch("/api/preferences", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collect()),
+  });
+  return res.ok;
 }
 
 async function save() {
-  await persist();
-  toast("保存しました");
+  toast(await persist() ? "保存しました" : "保存できませんでした");
 }
 
 async function recalc() {
+  if (!await persist()) { toast("保存できませんでした"); return; }
   toast("保存して再計算中…");
-  await persist();
-  await fetch("/api/scores/recalculate", { method: "POST" });
-  toast("再計算が完了しました");
+  const res = await adminFetch("/api/scores/recalculate", { method: "POST" });
+  toast(res.ok ? "再計算が完了しました" : "再計算できませんでした");
 }
 
 load();
