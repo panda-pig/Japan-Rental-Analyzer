@@ -204,6 +204,8 @@ def page_favorites():
 @app.route("/compare")
 def page_compare():
     return render_template("compare.html")
+
+
 @app.route("/settings")
 def page_settings():
     return render_template("settings.html")
@@ -475,6 +477,8 @@ def api_my_list():
             "ideal_area_m2": pref["ideal_area_m2"] if pref else 40,
         },
     })
+
+
 @app.route("/api/listings/<int:lid>", methods=["GET", "DELETE"])
 def api_listing_detail(lid):
     if request.method == "DELETE":
@@ -496,6 +500,8 @@ def api_listing_detail(lid):
     if not row:
         return jsonify({"error": "not found"}), 404
     return jsonify(row)
+
+
 @app.route("/api/status", methods=["GET", "POST"])
 def api_status():
     if request.method == "GET":
@@ -561,6 +567,8 @@ def api_pool_clear():
         conn.execute("DELETE FROM listing_scores")
         conn.execute("DELETE FROM rental_listings")
     return jsonify({"ok": True, "deleted": n})
+
+
 @app.route("/api/import/detail", methods=["POST"])
 def api_import_detail():
     """粘贴单个房源详情页 URL,自动解析入库 + 评分。支持4平台。"""
@@ -598,10 +606,12 @@ def api_import_detail():
 
     _score_single(listing_id)
 
+    # 住民評価は表示だけの付随情報。既定の再試行(6秒+12秒のバックオフ)を
+    # 導入リクエストの中で待たせないよう、ここでは1回だけ試す。
     try:
         from scrapers.machimusubi import get_station_review
         if raw.nearest_station:
-            get_station_review(raw.nearest_station)
+            get_station_review(raw.nearest_station, retries=0)
     except Exception:
         pass
 
@@ -662,6 +672,8 @@ def api_listing_refresh(lid):
         "price_changed": price_changed,
         "message": f"「{raw.title}」を更新しました" + (f" 価格変動: {old_cost}→{new_cost}円" if price_changed else " 価格変動なし"),
     })
+
+
 @app.route("/api/preferences")
 def api_preferences():
     return jsonify(query_one("SELECT * FROM user_preferences WHERE id=1"))

@@ -311,6 +311,8 @@ function drawRegionBar(elId, rows) {
   if (!el || !rows || !rows.length) { if (el) el.innerHTML = '<div class="empty-state">データなし</div>'; return; }
   chartA11y(el, `エリア別の平均相場(横棒グラフ)。${rows.length}エリア。` +
     rows.map(r => `${r.name}は${yen(r.value)}`).join('、') + '。');
+  // 23区を既定の320pxに詰めると1行14px、11pxのラベルがくっつく。行数で高さを決める。
+  el.style.height = Math.max(260, rows.length * 19 + 50) + 'px';
   initChart(el).setOption({
     ...BASE_OPT,
     grid: { left: 90, right: 30, top: 10, bottom: 30 },

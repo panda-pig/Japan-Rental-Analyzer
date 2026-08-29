@@ -187,8 +187,12 @@ def parse_station_scores(html):
     return scores
 
 
-def get_station_review(station, max_age_days=90, build_map=False):
-    """キャッシュ優先で駅の住民評価を返す。無ければ取得を試みる (失敗時 None)。"""
+def get_station_review(station, max_age_days=90, build_map=False, retries=2):
+    """キャッシュ優先で駅の住民評価を返す。無ければ取得を試みる (失敗時 None)。
+
+    retries はページ取得の再試行回数。既定の 2 回はバックオフ 6 秒・12 秒を挟むので、
+    ユーザーを待たせる導入リクエストからは retries=0 で呼ぶこと。
+    """
     station = extract_station(station)
     if not station:
         return None
@@ -202,7 +206,7 @@ def get_station_review(station, max_age_days=90, build_map=False):
     url = _resolve_url(station)
     if not url:
         return None
-    html = _fetch_retry(url)
+    html = _fetch_retry(url, retries=retries)
     if html is None:
         return None
     scores = parse_station_scores(html)

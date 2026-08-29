@@ -85,3 +85,27 @@ def test_romaji_reading_overrides():
     assert _romaji("大井町") == "oimachi"
     assert _romaji("向河原") == "mukaigawara"
     assert _romaji("たまプラーザ") == "tamaplaza"
+
+
+def test_fetch_retry_backs_off_only_when_asked(monkeypatch):
+    """retries=0 なら再試行もバックオフもしない(導入リクエストを待たせないため)。"""
+    import scrapers.machimusubi as m
+    calls = []
+    slept = []
+    monkeypatch.setattr(m, "fetch_html", lambda url: calls.append(url) or None)
+    monkeypatch.setattr(m.time, "sleep", lambda s: slept.append(s))
+
+    m._fetch_retry("https://www.homes.co.jp/machimusubi/x/", retries=0)
+    assert len(calls) == 1 and slept == []
+
+    calls.clear()
+    m._fetch_retry("https://www.homes.co.jp/machimusubi/x/", retries=2, backoff=6)
+    assert len(calls) == 3 and slept == [6, 12]
+
+
+def test_import_path_does_not_retry_station_review():
+    """導入リクエストは retries=0 で住民評価を引く(既定の 18 秒待ちを持ち込まない)。"""
+    import inspect
+    import app
+    src = inspect.getsource(app.api_import_detail)
+    assert "get_station_review(raw.nearest_station, retries=0)" in src
