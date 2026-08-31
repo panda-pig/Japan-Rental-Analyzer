@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scripts.init_db import init_db
-from scripts.seed_regions import seed_regions
+from scripts.seed_regions import seed_regions, seed_missing_regions
 
 app = Flask(__name__)
 
@@ -13,6 +13,9 @@ init_db()
 from db_helper import query_one, execute as _execute
 if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
     seed_regions()
+else:
+    # 一覧に増えたエリアを既存環境にも反映する(既存行と公的データには触れない)
+    seed_missing_regions()
 _execute("DELETE FROM region_stats WHERE ward IS NULL AND city IS NULL")
 
 

@@ -143,5 +143,44 @@ def _insert(conn, pref, city, ward, rent, safety, conv, env):
         (pref, city, ward, rent, 40.0, 25, safety, conv, env, datetime.now().isoformat()))
 
 
+def _major_rows():
+    """主要都市は相場を直書きしているので、取得なしで投入できる。"""
+    return [
+        ("大阪府", None, "大阪市", 95000, "中", "高", "中"),
+        ("京都府", None, "京都市", 92000, "高", "高", "高"),
+        ("兵庫県", None, "神戸市", 98000, "高", "高", "高"),
+        ("愛知県", None, "名古屋市", 85000, "中", "高", "中"),
+        ("北海道", None, "札幌市", 72000, "高", "高", "高"),
+        ("福岡県", None, "福岡市", 82000, "中", "高", "中"),
+        ("宮城県", None, "仙台市", 75000, "高", "高", "高"),
+        ("広島県", None, "広島市", 78000, "中", "高", "高"),
+    ]
+
+
+def seed_missing_regions():
+    """一覧に増えたエリアのうち、まだ無いものだけを足す。
+
+    seed_regions() は最初に region_stats を空にして相場を取り直すため、
+    公的データ(取引価格・災害)を消さないよう「テーブルが空のときだけ」動く。
+    その結果、一覧にエリアを足しても既存環境には永久に反映されなかった。
+    ここは既存行に触れず、不足分を入れるだけ。通信もしない。
+    """
+    conn = sqlite3.connect(DB_PATH)
+    have = {(r[0], r[1], r[2]) for r in
+            conn.execute("SELECT prefecture, city, ward FROM region_stats")}
+    added = []
+    for pref, city, ward, rent, safety, conv, env in _major_rows():
+        if (pref, city, ward) not in have:
+            _insert(conn, pref, city, ward, rent, safety, conv, env)
+            added.append(ward)
+    # 区単位のエリアは相場を取得しないと入れられないので、ここでは足さない
+    # (空DBなら seed_regions() が走るため、実際に欠けるのは主要都市だけ)
+    conn.commit()
+    conn.close()
+    if added:
+        print(f"Added {len(added)} missing regions: {', '.join(added)}")
+    return added
+
+
 if __name__ == "__main__":
     seed_regions()
