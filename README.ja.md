@@ -6,13 +6,16 @@
 
 東京・横浜・川崎の賃貸意思決定ツール
 
-[English](README.md) · **日本語** · [简体中文](README.zh-CN.md)
+### [▶ デモを開く](https://tokyo-yokohama-rental-intelligence.onrender.com)
+
+[ソース](https://github.com/panda-pig/Japan-Rental-Analyzer) · [English](README.md) · **日本語** · [简体中文](README.zh-CN.md)
 
 </div>
 
 ![ホーム](screenshots/hero.png)
 
-<sub>スクリーンショットの物件はサンプルです。エリア相場・取引価格・災害リスクは実データです。</sub>
+<sub>スクリーンショットの物件はサンプルです。エリア相場・取引価格・災害リスクは実データです。<br>
+デモは Render の無料プランで動いているため、しばらく使われていないと初回表示に1分ほどかかります。</sub>
 
 ---
 
@@ -80,10 +83,10 @@ SUUMO / LIFULL HOME'S / athome / Yahoo!不動産 の物件詳細ページに対�
 | データ | 出典 | 取得方法 |
 |---|---|---|
 | 物件情報 | ユーザーが貼った詳細ページのみ | 単発取得・一括クロールなし |
-| エリア平均賃料 | SUUMO 家賃相場 | 低頻度・手動シード |
-| 不動産取引価格 | 国土交通省 不動産情報ライブラリ (XIT001) | 公式API（キー必要） |
+| エリア平均賃料 | [SUUMO 家賃相場](https://suumo.jp/chintai/soba/) | 低頻度・手動シード |
+| 不動産取引価格 | [国土交通省 不動産情報ライブラリ](https://www.reinfolib.mlit.go.jp/) (XIT001) | 公式API（キー必要） |
 | 災害リスク | 同上 (XKT026 洪水 / XKT029 土砂) | 公式APIタイル |
-| 駅の住民評価 | LIFULL HOME'S まちむすび | 集計値のみ・口コミ本文は保存しない |
+| 駅の住民評価 | [LIFULL HOME'S まちむすび](https://www.homes.co.jp/machimusubi/) | 集計値のみ・口コミ本文は保存しない |
 
 ## 技術スタック
 

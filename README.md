@@ -6,13 +6,16 @@
 
 Tokyo · Yokohama · Kawasaki rental decision tool
 
-**English** · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
+### [▶ Try it live](https://tokyo-yokohama-rental-intelligence.onrender.com)
+
+[Source](https://github.com/panda-pig/Japan-Rental-Analyzer) · **English** · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
 
 </div>
 
 ![Home](screenshots/hero.png)
 
-<sub>Screenshots use sample listings. Area rents, transaction prices and hazard levels are real.</sub>
+<sub>Screenshots use sample listings. Area rents, transaction prices and hazard levels are real.<br>
+The demo runs on Render's free tier, so the first request after a quiet spell takes about a minute to wake up.</sub>
 
 ---
 
@@ -88,10 +91,10 @@ to compare two areas, and a sortable table of all 56 areas.
 | Data | Source | How it is fetched |
 |---|---|---|
 | Listing details | Only pages the user pastes | One page at a time, no crawling |
-| Area average rent | SUUMO rent statistics | Low frequency, seeded manually |
-| Transaction prices | MLIT Real Estate Information Library (XIT001) | Official API (key required) |
+| Area average rent | [SUUMO rent statistics](https://suumo.jp/chintai/soba/) | Low frequency, seeded manually |
+| Transaction prices | [MLIT Real Estate Information Library](https://www.reinfolib.mlit.go.jp/) (XIT001) | Official API (key required) |
 | Hazard risk | Same library (XKT026 flood / XKT029 landslide) | Official API tiles |
-| Station reviews | LIFULL HOME'S Machimusubi | Aggregate scores only, never review text |
+| Station reviews | [LIFULL HOME'S Machimusubi](https://www.homes.co.jp/machimusubi/) | Aggregate scores only, never review text |
 
 ## Tech stack
 

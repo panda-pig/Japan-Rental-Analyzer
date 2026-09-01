@@ -6,13 +6,16 @@
 
 东京 · 横滨 · 川崎 租房决策工具
 
-[English](README.md) · [日本語](README.ja.md) · **简体中文**
+### [▶ 打开在线演示](https://tokyo-yokohama-rental-intelligence.onrender.com)
+
+[源码](https://github.com/panda-pig/Japan-Rental-Analyzer) · [English](README.md) · [日本語](README.ja.md) · **简体中文**
 
 </div>
 
 ![首页](screenshots/hero.png)
 
-<sub>截图中的房源为示例数据；区域行情、成交价格与灾害风险为真实数据。</sub>
+<sub>截图中的房源为示例数据；区域行情、成交价格与灾害风险为真实数据。<br>
+演示部署在 Render 免费方案上，闲置一段时间后首次打开需要约一分钟唤醒。</sub>
 
 ---
 
@@ -77,10 +80,10 @@
 | 数据 | 来源 | 获取方式 |
 |---|---|---|
 | 房源信息 | 仅限用户粘贴的详情页 | 单次获取，不做批量爬取 |
-| 区域平均租金 | SUUMO 家賃相場 | 低频、手动导入 |
-| 不动产成交价 | 国土交通省 不动产信息库 (XIT001) | 官方 API（需密钥） |
+| 区域平均租金 | [SUUMO 家賃相場](https://suumo.jp/chintai/soba/) | 低频、手动导入 |
+| 不动产成交价 | [国土交通省 不动产信息库](https://www.reinfolib.mlit.go.jp/) (XIT001) | 官方 API（需密钥） |
 | 灾害风险 | 同上 (XKT026 洪水 / XKT029 土砂) | 官方 API 瓦片 |
-| 车站居民评价 | LIFULL HOME'S まちむすび | 仅存汇总分，不存评论正文 |
+| 车站居民评价 | [LIFULL HOME'S まちむすび](https://www.homes.co.jp/machimusubi/) | 仅存汇总分，不存评论正文 |
 
 ## 技术栈
 
