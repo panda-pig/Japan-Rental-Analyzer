@@ -392,7 +392,7 @@ function reportHtml(l, region) {
     ['家賃', yen(l.rent)], ['管理費', yen(l.management_fee)],
     ['間取り', esc(l.layout || '-')], ['階数', l.floor ? `${l.floor}階${l.total_floors ? ' / ' + l.total_floors + '階建' : ''}` : '-'],
     ['築年数', `築${l.building_age ?? '?'}年`], ['構造', esc(l.structure || '-')],
-    ['最寄駅', `${esc(l.nearest_station || '-')} 徒歩${l.walk_minutes ?? '?'}分`],
+    ['最寄駅', `${esc(l.station_name || l.nearest_station || '-')} 徒歩${l.walk_minutes ?? '?'}分`],
     ['敷金 / 礼金', `${yen(l.deposit)} / ${yen(l.key_money)}`],
   ];
 

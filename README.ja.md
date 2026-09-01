@@ -99,7 +99,7 @@ SUUMO / LIFULL HOME'S / athome / Yahoo!不動産 の物件詳細ページに対�
 | 駅名照合 | pykakasi（漢字→ローマ字）+ 正規化 + 近似マッチ |
 | 通勤計算 | NAVITIME Transfer API（任意） |
 | フロントエンド | Jinja2 / Vanilla JS / ECharts 5 / wordcloud2.js |
-| テスト | pytest・106テスト |
+| テスト | pytest・107テスト |
 
 取得先はホスト名を解析した上で許可リストと照合し、プライベートアドレスは拒否、
 リダイレクトも1ホップごとに再検査します。スクレイプした文字列はDOMに入れる前に

@@ -342,6 +342,9 @@ def api_my_list():
             reviews[r["station"]] = r
     for l in listings:
         rv = reviews.get(st_keys[l["id"]])
+        # 生の nearest_station は路線名や複数駅が繋がった塊のことがあるので、
+        # 表示にはここで取り出した最寄駅名を使う。
+        l["station_name"] = st_keys[l["id"]]
         l["st_station"] = st_keys[l["id"]] if rv else None
         for col in ("transport", "safety", "shopping", "childcare", "nature"):
             l["st_" + col] = rv[col] if rv else None
@@ -378,7 +381,8 @@ def api_my_list():
         "initial_cost_estimate": l.get("initial_cost_estimate"),
         "area_m2": l.get("area_m2"), "price_per_m2": l.get("price_per_m2"),
         "layout": l.get("layout"), "floor": l.get("floor"),
-        "nearest_station": l.get("nearest_station"), "walk_minutes": l.get("walk_minutes"),
+        "nearest_station": l.get("nearest_station"),
+        "station_name": l.get("station_name"), "walk_minutes": l.get("walk_minutes"),
         "building_age": l.get("building_age"), "pet_allowed": l.get("pet_allowed"),
         "deposit": l.get("deposit"), "key_money": l.get("key_money"),
         "commute_minutes": l.get("commute_minutes"), "commute_resolved": l.get("commute_resolved"),
@@ -558,6 +562,9 @@ def api_compare():
         s.station_score, s.age_score, s.initial_cost_score
         FROM rental_listings l LEFT JOIN listing_scores s ON s.listing_id=l.id
         WHERE l.id IN ({placeholders})""", id_list)
+    from scrapers.machimusubi import extract_station
+    for r in rows:
+        r["station_name"] = extract_station(r.get("nearest_station"))
     return jsonify(rows)
 
 

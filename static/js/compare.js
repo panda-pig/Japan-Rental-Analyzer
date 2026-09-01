@@ -74,7 +74,7 @@ async function load() {
     ["スコア", "total_score"], ["月額", "total_monthly_cost"], ["家賃", "rent"],
     ["管理費", "management_fee"], ["初期費用", "initial_cost_estimate"],
     ["面積", "area_m2"], ["㎡単価", "price_per_m2"], ["間取り", "layout"],
-    ["階", "floor"], ["最寄駅", "nearest_station"], ["徒歩", "walk_minutes"],
+    ["階", "floor"], ["最寄駅", "station_name"], ["徒歩", "walk_minutes"],
     ["築年数", "building_age"], ["ペット", "pet_allowed"], ["敷金", "deposit"],
     ["礼金", "key_money"], ["プラットフォーム", "platform"], ["通勤(分)", "commute_minutes"],
   ];

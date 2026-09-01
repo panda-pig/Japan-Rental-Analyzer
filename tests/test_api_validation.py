@@ -49,3 +49,35 @@ def test_live_routes_still_answer(client):
     for path in ["/", "/my-list", "/favorites", "/compare", "/settings",
                  "/api/dashboard", "/api/my-list", "/api/preferences"]:
         assert client.get(path).status_code == 200, path
+
+
+def test_my_list_exposes_a_clean_station_name(client):
+    """nearest_station は路線名と複数駅が繋がった塊のことがある。
+
+    表示用に取り出した駅名を、住民評価の有無にかかわらず返すこと。
+    実データ例: 'ＪＲ山手線/東京駅 歩10分…東京メトロ日比谷線/八丁堀駅 歩3分'
+    """
+    from db_helper import get_conn
+    raw = "ＪＲ山手線/東京駅 歩10分東京メトロ銀座線/京橋駅 歩7分東京メトロ日比谷線/八丁堀駅 歩3分"
+    conn = get_conn()
+    cur = conn.execute(
+        "INSERT INTO rental_listings(platform, detail_url, source_url, title, ward, "
+        "nearest_station, rent, total_monthly_cost, is_active) "
+        "VALUES ('SUUMO', 'TEST://station', 'TEST://station', '駅名テスト', '中央区', ?, 1, 1, 1)",
+        (raw,))
+    lid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    try:
+        rows = client.get("/api/my-list").get_json()["compare_rows"]
+        row = next(r for r in rows if r["id"] == lid)
+        assert row["station_name"] == "八丁堀"
+        assert row["nearest_station"] == raw, "生の値も残しておくこと"
+
+        cmp_rows = client.get(f"/api/compare?ids={lid}").get_json()
+        assert cmp_rows[0]["station_name"] == "八丁堀"
+    finally:
+        conn = get_conn()
+        conn.execute("DELETE FROM rental_listings WHERE id=?", (lid,))
+        conn.commit()
+        conn.close()

@@ -107,7 +107,7 @@ to compare two areas, and a sortable table of all 56 areas.
 | Station matching | pykakasi (kanji → romaji) with normalisation and fuzzy matching |
 | Commute | NAVITIME Transfer API (optional) |
 | Frontend | Jinja2 / vanilla JS / ECharts 5 / wordcloud2.js |
-| Tests | pytest, 106 tests |
+| Tests | pytest, 107 tests |
 
 Fetch targets are restricted to an allow-list matched on the parsed hostname,
 private addresses are refused and redirects are re-checked at every hop.
