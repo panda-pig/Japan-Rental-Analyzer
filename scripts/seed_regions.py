@@ -166,13 +166,18 @@ def seed_missing_regions():
     ここは既存行に触れず、不足分を入れるだけ。通信もしない。
     """
     conn = sqlite3.connect(DB_PATH)
-    have = {(r[0], r[1], r[2]) for r in
-            conn.execute("SELECT prefecture, city, ward FROM region_stats")}
+    # 同じ都市が (city=大阪市, ward=NULL) と (city=NULL, ward=大阪市) の
+    # 両方の形で保存されている環境があるため、表示名で照合する。
+    # タプル完全一致で見ると既存行を見落として重複を作ってしまう。
+    have = {(r[0], r[1] or r[2]) for r in
+            conn.execute("SELECT prefecture, ward, city FROM region_stats")}
     added = []
     for pref, city, ward, rent, safety, conv, env in _major_rows():
-        if (pref, city, ward) not in have:
+        label = ward or city
+        if (pref, label) not in have:
             _insert(conn, pref, city, ward, rent, safety, conv, env)
-            added.append(ward)
+            have.add((pref, label))
+            added.append(label)
     # 区単位のエリアは相場を取得しないと入れられないので、ここでは足さない
     # (空DBなら seed_regions() が走るため、実際に欠けるのは主要都市だけ)
     conn.commit()
@@ -180,6 +185,39 @@ def seed_missing_regions():
     if added:
         print(f"Added {len(added)} missing regions: {', '.join(added)}")
     return added
+
+
+def dedupe_regions():
+    """同じ都道府県・表示名の行が複数あれば1件に寄せる。
+
+    表示名で照合していなかった頃の補充で、大阪市・京都市のように
+    行の形が違うだけの重複が生まれた環境がある。
+    公的データを持つ行を優先し、無ければ古い方(id小)を残す。
+    """
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        "SELECT id, prefecture, COALESCE(ward, city) AS label, trade_price_per_m2, hazard_level "
+        "FROM region_stats ORDER BY id").fetchall()
+    seen, drop = {}, []
+    for rid, pref, label, trade, hazard in rows:
+        key = (pref, label)
+        score = (trade is not None) + (hazard is not None)
+        if key not in seen:
+            seen[key] = (rid, score)
+            continue
+        keep_id, keep_score = seen[key]
+        if score > keep_score:          # 新しい方が情報を持つなら入れ替える
+            drop.append(keep_id)
+            seen[key] = (rid, score)
+        else:
+            drop.append(rid)
+    for rid in drop:
+        conn.execute("DELETE FROM region_stats WHERE id=?", (rid,))
+    conn.commit()
+    conn.close()
+    if drop:
+        print(f"Removed {len(drop)} duplicate region rows")
+    return drop
 
 
 if __name__ == "__main__":

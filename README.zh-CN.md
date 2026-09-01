@@ -96,7 +96,7 @@
 | 站名匹配 | pykakasi（汉字→罗马字）+ 归一化 + 近似匹配 |
 | 通勤计算 | NAVITIME Transfer API（可选） |
 | 前端 | Jinja2 / 原生 JS / ECharts 5 / wordcloud2.js |
-| 测试 | pytest，103 个测试 |
+| 测试 | pytest，106 个测试 |
 
 抓取目标按解析出的主机名与白名单严格比对，拒绝私有地址，并对每一跳重定向重新
 校验。抓来的文本进入 DOM 前一律转义。设置了 `ADMIN_TOKEN` 的环境中，破坏性操作
