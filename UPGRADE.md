@@ -27,6 +27,8 @@ reviews run in a bounded background queue. The page checks for completion.
 Commute results are cached for 24 hours (failed lookups for 5 minutes). Jobs are
 local to the single Gunicorn process; after a restart or a full queue, use the
 refresh action to retry. Keep `--workers 1 --threads 4` as in `Procfile`.
+`gunicorn.conf.py` applies these defaults to Render services whose saved start
+command does not include thread and timeout options.
 Saving preferences recalculates scores using cached commute results immediately.
 
 Tests always use temporary databases and mock external HTTP. Run:
