@@ -103,9 +103,20 @@ def test_fetch_retry_backs_off_only_when_asked(monkeypatch):
     assert len(calls) == 3 and slept == [6, 12]
 
 
-def test_import_path_does_not_retry_station_review():
-    """導入リクエストは retries=0 で住民評価を引く(既定の 18 秒待ちを持ち込まない)。"""
-    import inspect
+def test_import_returns_before_station_review(client, monkeypatch):
     import app
-    src = inspect.getsource(app.api_import_detail)
-    assert "get_station_review(raw.nearest_station, retries=0)" in src
+    from scrapers.models import RawListing
+    from scrapers import base, machimusubi
+    raw = RawListing(platform="SUUMO", detail_url="https://suumo.jp/chintai/review/",
+                     title="Test listing", rent_raw="10万円", nearest_station="東京")
+    monkeypatch.setattr(base, "fetch_html", lambda url: "html")
+    monkeypatch.setattr(app, "_detail_parser", lambda url: lambda *args: raw)
+    queued = []
+    monkeypatch.setattr(app, "_enqueue_enrichment", lambda lid: queued.append(lid) or "pending")
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Station reviews must not run in the request")
+    monkeypatch.setattr(machimusubi, "get_station_review", unexpected)
+    response = client.post("/api/import/detail", json={"url": raw.detail_url})
+    assert response.status_code == 200
+    assert queued == [response.json["id"]]
+    assert response.json["enrichment_status"] == "pending"

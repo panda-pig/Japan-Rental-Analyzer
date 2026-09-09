@@ -101,18 +101,18 @@ to compare two areas, and a sortable table of all 56 areas.
 | Layer | Choice |
 |---|---|
 | Backend | Python 3.14 / Flask |
-| Database | SQLite, 11 tables |
+| Database | SQLite with versioned migrations |
 | Scraping | requests / BeautifulSoup4, robots.txt respected, polite sleep |
 | Public data | Real Estate Information Library API + XYZ tile maths |
 | Station matching | pykakasi (kanji → romaji) with normalisation and fuzzy matching |
 | Commute | NAVITIME Transfer API (optional) |
 | Frontend | Jinja2 / vanilla JS / ECharts 5 / wordcloud2.js |
-| Tests | pytest, 107 tests |
+| Tests | pytest + Node.js regression tests |
 
 Fetch targets are restricted to an allow-list matched on the parsed hostname,
 private addresses are refused and redirects are re-checked at every hop.
-Scraped text is escaped before it reaches the DOM. Destructive and
-configuration endpoints require `ADMIN_TOKEN` when it is set.
+Scraped text is escaped before it reaches the DOM. All API write
+endpoints require `ADMIN_TOKEN` when it is set.
 
 The interface targets WCAG 2.1 AA: keyboard-operable tables, text
 alternatives for every chart, live regions for form results, AA contrast, 44px
@@ -128,7 +128,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 #   REINFOLIB_API_KEY   : Real Estate Information Library (optional)
 #   NAVITIME_CLIENT_KEY : commute time (without it the commute axis is skipped)
-#   ADMIN_TOKEN         : required for destructive routes when set
+#   ADMIN_TOKEN         : required for all API writes when set
 
 python scripts/init_db.py
 python scripts/seed_regions.py
@@ -144,13 +144,13 @@ python app.py    # http://127.0.0.1:5000
 Batch scraping is a command-line job, not a route:
 `python scripts/run_scrape.py` works off the rows in `source_configs`.
 When `ADMIN_TOKEN` is set, the pages ask for it once on the first
-destructive action and remember it in the browser.
+write action and remember it in the browser.
 
 ## Deploying to Render
 
 1. New → Web Service → connect this repository
 2. Build `pip install -r requirements.txt`,
-   start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`
+   start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4`
 3. Persistent disk 1 GB mounted at `db`
 4. Environment: `DB_PATH=/opt/render/project/src/db/database.db`,
    `REINFOLIB_API_KEY`, `ADMIN_TOKEN`
@@ -168,3 +168,6 @@ destructive action and remember it in the browser.
 - Public data and resident reviews are attributed in the UI and excluded from
   the property score.
 - Built for personal research. The data is not redistributed commercially.
+
+
+[Reliability update and upgrade notes](UPGRADE.md)

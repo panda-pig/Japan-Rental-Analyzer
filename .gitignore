@@ -3,6 +3,8 @@ __pycache__/
 .env
 .venv/
 db/database.db
+db/*.db-*
+db/backups/
 .pytest_cache/
 data/*.csv
 tests/fixtures/*_real.html

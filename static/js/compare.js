@@ -2,6 +2,7 @@
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
 function safeUrl(u) {
+  if (typeof u !== 'string' || !u.trim()) return '';
   try {
     const p = new URL(u, location.origin);
     return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
@@ -28,6 +29,9 @@ function drawCompareRadar(data) {
     scored.map(l => `${l.title}は総合${l.total_score}点`).join('、') +
     '。項目ごとの数値は下の比較表を参照してください。');
   if (radarChart) radarChart.dispose();
+  const indices = RADAR_DIMS.map((_, i) => i).filter(i =>
+    (i !== 2 || scored.every(l => l.commute_resolved)) &&
+    (i !== 7 || scored.every(l => l.initial_cost_score != null)));
   radarChart = echarts.init(el);
   radarChart.setOption({
     animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -39,7 +43,7 @@ function drawCompareRadar(data) {
     },
     legend: { bottom: 0, data: scored.map(l => l.title), textStyle: { color: '#6E6C63', fontFamily: CHART_FONT, fontSize: 12 } },
     radar: {
-      indicator: RADAR_DIMS, shape: 'polygon', radius: '68%', center: ['50%', '48%'],
+      indicator: indices.map(i => RADAR_DIMS[i]), shape: 'polygon', radius: '68%', center: ['50%', '48%'],
       axisName: { color: '#6E6C63', fontFamily: CHART_FONT, fontSize: 12 },
       splitArea: { areaStyle: { color: ['rgba(86,105,110,0.02)', 'rgba(86,105,110,0.05)'] } },
     },
@@ -48,7 +52,7 @@ function drawCompareRadar(data) {
       data: scored.map((l, i) => ({
         name: l.title,
         value: [l.budget_score || 0, l.area_score || 0, l.commute_score || 0, l.floor_score || 0,
-                l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0],
+                l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0].filter((_, i) => indices.includes(i)),
         itemStyle: { color: PALETTE[i % PALETTE.length] },
         lineStyle: { color: PALETTE[i % PALETTE.length], width: 2 },
         areaStyle: { color: PALETTE[i % PALETTE.length], opacity: 0.08 },
@@ -58,17 +62,21 @@ function drawCompareRadar(data) {
 }
 
 async function load() {
-  const ids = JSON.parse(localStorage.getItem("compareIds") || "[]");
+  const ids = Rental.readCompareIds();
   const el = document.getElementById("compare-table");
   if (ids.length < 2) {
     document.getElementById('radar-card').style.display = 'none';
     el.innerHTML = '<div class="empty-state">比較には2件以上選択してください。<br>物件分析ページの物件プールでチェックして「選択して比較」を押してください。</div>';
     return;
   }
-  const res = await fetch("/api/compare?ids=" + ids.join(","));
-  const data = await res.json();
+  const data = await Rental.requestJSON("/api/compare?ids=" + ids.join(","));
+  if (data.length < 2) {
+    document.getElementById('radar-card').style.display = 'none';
+    el.textContent = '選択した物件が削除されています。物件プールから2件以上選び直してください。';
+    return;
+  }
 
-  drawCompareRadar(data);
+  if (typeof echarts !== 'undefined') drawCompareRadar(data);
 
   const rows = [
     ["スコア", "total_score"], ["月額", "total_monthly_cost"], ["家賃", "rent"],
@@ -77,6 +85,9 @@ async function load() {
     ["階", "floor"], ["最寄駅", "station_name"], ["徒歩", "walk_minutes"],
     ["築年数", "building_age"], ["ペット", "pet_allowed"], ["敷金", "deposit"],
     ["礼金", "key_money"], ["プラットフォーム", "platform"], ["通勤(分)", "commute_minutes"],
+    ["予算 /20", "budget_score"], ["面積 /15", "area_score"], ["通勤 /15", "commute_score"],
+    ["階数 /10", "floor_score"], ["ペット /15", "pet_score"], ["駅距離 /10", "station_score"],
+    ["築年数 /10", "age_score"], ["初期費用 /5", "initial_cost_score"],
   ];
   let html = '<table style="width:100%;"><thead><tr><th>項目</th>' + data.map(l => `<th>${esc(l.title)}</th>`).join("") + '</tr></thead><tbody>';
   for (const [label, key] of rows) {
@@ -89,9 +100,15 @@ async function load() {
       else if (key === "total_score" && v != null)
         cell = `<span class="badge score${v >= 75 ? '' : v >= 60 ? ' mid' : ' low'}">${esc(v)}</span>`;
       else if (key === "pet_allowed")
-        cell = v ? '<span class="tag good">可</span>' : '<span class="tag muted">不可</span>';
-      else if (key === "commute_minutes" && !l.commute_resolved)
+        cell = v == null ? '未取得' : v ? '<span class="tag good">可</span>' : '<span class="tag muted">不可</span>';
+      else if (["commute_minutes", "commute_score"].includes(key) && !l.commute_resolved)
         cell = '<span class="tag muted">未取得</span>';
+      else if (key.endsWith('_score') && v == null)
+        cell = '<span class="tag muted">未取得</span>';
+      else if (key === 'price_per_m2' && v != null)
+        cell = esc(Math.round(v).toLocaleString() + '円/㎡');
+      else if (key === 'area_m2' && v != null)
+        cell = esc(v.toLocaleString(undefined, {maximumFractionDigits: 1}) + '㎡');
       else if (key === "platform" && v)
         cell = `<span class="badge platform">${esc(v)}</span>`;
       else
@@ -109,4 +126,4 @@ window.addEventListener('resize', () => {
   clearTimeout(_rz);
   _rz = setTimeout(() => { if (radarChart) radarChart.resize(); }, 250);
 });
-load();
+load().catch(error => Rental.showError('compare-table', error));

@@ -9,17 +9,9 @@ from scripts import seed_regions as seed
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
-    """region_stats だけを持つ空DBを用意し、seed_regions が見る DB_PATH を差し替える。"""
+    from scripts.init_db import init_db
     path = str(tmp_path / "t.db")
-    conn = sqlite3.connect(path)
-    conn.execute("""CREATE TABLE region_stats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        prefecture TEXT, city TEXT, ward TEXT, avg_rent INTEGER,
-        avg_area REAL, avg_building_age INTEGER,
-        safety_level TEXT, convenience_level TEXT, environment_level TEXT,
-        trade_price_per_m2 INTEGER, hazard_level TEXT, updated_at TEXT)""")
-    conn.commit()
-    conn.close()
+    init_db(path)
     monkeypatch.setattr(seed, "DB_PATH", path)
     return path
 

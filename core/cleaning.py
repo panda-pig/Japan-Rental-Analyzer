@@ -1,4 +1,6 @@
 import re
+import unicodedata
+from decimal import Decimal
 from datetime import datetime
 
 
@@ -11,7 +13,7 @@ def parse_money(text):
     """
     if text is None:
         return None
-    s = str(text).strip()
+    s = unicodedata.normalize("NFKC", str(text)).strip()
     if s == "":
         return None
     if s in ("なし", "無"):
@@ -21,7 +23,7 @@ def parse_money(text):
     m = re.search(r"([\d,]+\.?\d*)\s*万?円", s)
     if m:
         num_str = m.group(1).replace(",", "")
-        val = float(num_str)
+        val = Decimal(num_str)
         if "万" in s:
             val *= 10000
         return int(val)
@@ -35,12 +37,16 @@ def parse_deposit_key_money(text, rent):
     """解析敷金/礼金。'1ヶ月' -> rent*1, 'なし' -> 0。"""
     if text is None:
         return None
-    s = str(text).strip()
-    if s == "" or s in ("なし", "無"):
+    s = unicodedata.normalize("NFKC", str(text)).strip()
+    if not s:
+        return None
+    if s in ("なし", "無"):
         return 0
-    m = re.search(r"(\d+)\s*ヶ月", s)
-    if m and rent is not None:
-        return int(rent) * int(m.group(1))
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:ヶ|ケ|か|カ|箇)?月(?:分)?", s)
+    if m:
+        return int(Decimal(m.group(1)) * rent) if rent is not None else None
+    if "月" in s:
+        return None
     return parse_money(s)
 
 

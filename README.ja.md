@@ -93,17 +93,17 @@ SUUMO / LIFULL HOME'S / athome / Yahoo!不動産 の物件詳細ページに対�
 | レイヤー | 技術 |
 |---|---|
 | バックエンド | Python 3.14 / Flask |
-| データベース | SQLite・11テーブル |
+| データベース | SQLite・バージョン管理されたマイグレーション |
 | スクレイピング | requests / BeautifulSoup4（robots.txt遵守・礼儀スリープ） |
 | 公的データ | 不動産情報ライブラリAPI + XYZタイル座標計算 |
 | 駅名照合 | pykakasi（漢字→ローマ字）+ 正規化 + 近似マッチ |
 | 通勤計算 | NAVITIME Transfer API（任意） |
 | フロントエンド | Jinja2 / Vanilla JS / ECharts 5 / wordcloud2.js |
-| テスト | pytest・107テスト |
+| テスト | pytest + Node.js 回帰テスト |
 
 取得先はホスト名を解析した上で許可リストと照合し、プライベートアドレスは拒否、
 リダイレクトも1ホップごとに再検査します。スクレイプした文字列はDOMに入れる前に
-必ずエスケープします。破壊的操作と設定変更は `ADMIN_TOKEN` を設定した環境では
+必ずエスケープします。すべての API 書き込みは `ADMIN_TOKEN` を設定した環境では
 トークンを要求します。
 
 UIは WCAG 2.1 AA を目標にしています。キーボードで操作できる表、全グラフの代替
@@ -120,7 +120,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 #   REINFOLIB_API_KEY   : 不動産情報ライブラリ（任意）
 #   NAVITIME_CLIENT_KEY : 通勤時間（無ければ通勤軸は自動で除外）
-#   ADMIN_TOKEN         : 設定すると破壊的操作にトークンが必要になる
+#   ADMIN_TOKEN         : 設定すると書き込み操作にトークンが必要になる
 
 python scripts/init_db.py
 python scripts/seed_regions.py
@@ -135,14 +135,14 @@ python app.py    # http://127.0.0.1:5000
 
 一括抓取はコマンドラインで行います（HTTPエンドポイントはありません）。
 `python scripts/run_scrape.py` が `source_configs` の行を読んで実行します。
-`ADMIN_TOKEN` を設定している場合、画面は最初の破壊的操作で一度だけ
+`ADMIN_TOKEN` を設定している場合、画面は最初の書き込み操作で一度だけ
 トークンを尋ね、ブラウザに記憶します。
 
 ## Render デプロイ
 
 1. New → Web Service → このリポジトリを接続
 2. Build `pip install -r requirements.txt`、
-   Start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`
+   Start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4`
 3. Persistent Disk 1GB、マウントパス `db`
 4. 環境変数 `DB_PATH=/opt/render/project/src/db/database.db`、
    `REINFOLIB_API_KEY`、`ADMIN_TOKEN`
@@ -157,3 +157,6 @@ python app.py    # http://127.0.0.1:5000
 - 住民評価は集計数値のみ保存し、口コミ本文・個人情報は保存しない
 - 公的データと住民評価は出典をUIに明示し、物件スコアには算入しない
 - 個人の学習・意思決定支援が目的。データの商用再配布はしない
+
+
+[信頼性改善とアップグレード手順](UPGRADE.md)

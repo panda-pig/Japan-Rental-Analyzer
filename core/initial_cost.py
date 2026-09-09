@@ -11,10 +11,8 @@ def estimate_initial_cost(rent, deposit, key_money,
                           prepaid_rent_months=DEFAULT_PREPAID_RENT_MONTHS,
                           misc_cost=DEFAULT_MISC_COST):
     """初期费用估算 = 敷金 + 礼金 + 仲介手数料 + 前家賃 + 固定杂费"""
-    if rent is None:
+    if rent is None or deposit is None or key_money is None:
         return None
-    deposit = deposit or 0
-    key_money = key_money or 0
     broker = int(rent * broker_fee_rate)
     prepaid = rent * prepaid_rent_months
     return int(deposit + key_money + broker + prepaid + misc_cost)

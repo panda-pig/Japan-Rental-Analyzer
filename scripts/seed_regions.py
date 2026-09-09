@@ -9,12 +9,10 @@ import sqlite3
 import sys
 import os
 import re
-import time
-import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DB_PATH, SCRAPE_USER_AGENT, SCRAPE_SLEEP_SECONDS
+from config import DB_PATH
 
 TOKYO_WARDS = [
     ("千代田区", "chiyoda", "高", "高", "中"), ("中央区", "chuo", "高", "高", "中"),
@@ -56,91 +54,97 @@ KAWASAKI_WARDS = [
     ("川崎区", "kawasakishikawasaki", "中", "高", "中"),
     ("幸区", "kawasakishisaiwai", "中", "高", "中"),
     ("中原区", "kawasakishinakahara", "高", "高", "中"),
-    ("高津区", "kawasakshitakatsu", "高", "高", "高"),
+    ("高津区", "kawasakishitakatsu", "高", "高", "高"),
     ("多摩区", "kawasakishitama", "高", "中", "高"),
     ("宮前区", "kawasakishimiyamae", "高", "中", "高"),
     ("麻生区", "kawasakishiasao", "高", "中", "高"),
 ]
 
 
-def fetch_avg_rent(prefecture, slug):
-    """从 SUUMO 家賃相場页抓取1LDK平均租金。"""
-    url = f"https://suumo.jp/chintai/soba/{prefecture}/sc_{slug}/"
-    try:
-        resp = requests.get(url, headers={"User-Agent": SCRAPE_USER_AGENT}, timeout=15)
-        if resp.status_code != 200:
-            return None, None
-        soup = BeautifulSoup(resp.text, "html.parser")
-        rent_1ldk = None
-        rent_1k = None
-        for t in soup.select("table"):
-            for tr in t.select("tr"):
-                tds = tr.select("td")
-                if len(tds) >= 2:
-                    layout = tds[0].get_text(strip=True)
-                    rent_text = tds[1].get_text(strip=True)
-                    if layout == "1LDK" and "万円" in rent_text:
-                        m = re.search(r"([\d.]+)万円", rent_text)
-                        if m:
-                            rent_1ldk = int(float(m.group(1)) * 10000)
-                    if layout == "1K" and "万円" in rent_text:
-                        m = re.search(r"([\d.]+)万円", rent_text)
-                        if m:
-                            rent_1k = int(float(m.group(1)) * 10000)
-        time.sleep(SCRAPE_SLEEP_SECONDS)
-        return rent_1ldk, rent_1k
-    except Exception:
-        return None, None
+def parse_rent_benchmarks(html):
+    """Keep each layout separate, including the source's management-fee basis."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ", strip=True)
+    fee_basis = None
+    if re.search(r"(?:管理費|共益費).{0,30}(?:含ま(?:ない|ず)|除く|除外)", text):
+        fee_basis = 0
+    elif re.search(r"(?:管理費|共益費).{0,30}(?:含む|込み)", text):
+        fee_basis = 1
+    rents = {}
+    for tr in soup.select("table tr"):
+        cells = tr.select("td")
+        if len(cells) < 2:
+            continue
+        layout = re.sub(r"\s+", "", cells[0].get_text()).upper()
+        if layout == "ワンルーム":
+            layout = "1R"
+        if not re.fullmatch(r"[1-9](?:R|K|DK|LDK|SDK|SLDK)", layout):
+            continue
+        from core.cleaning import parse_money
+        rent = parse_money(cells[1].get_text(strip=True))
+        if rent and rent > 0:
+            rents[layout] = rent
+    return rents, fee_basis
+
+
+def _regional_rows():
+    for pref, city, url_pref, wards in (
+        ("東京都", None, "tokyo", TOKYO_WARDS),
+        ("神奈川県", "横浜市", "kanagawa", YOKOHAMA_WARDS),
+        ("神奈川県", "川崎市", "kanagawa", KAWASAKI_WARDS),
+    ):
+        for ward, slug, safety, conv, env in wards:
+            yield pref, city, ward, safety, conv, env, f"https://suumo.jp/chintai/soba/{url_pref}/sc_{slug}/"
+
+
+def seed_region_catalog():
+    """Fast offline startup: add missing regions without inventing market values."""
+    seed_missing_regions()
+    with sqlite3.connect(DB_PATH) as conn:
+        for pref, city, ward, safety, conv, env, _ in _regional_rows():
+            if not conn.execute("SELECT 1 FROM region_stats WHERE prefecture=? AND city IS ? AND ward=?",
+                                (pref, city, ward)).fetchone():
+                _insert(conn, pref, city, ward, None, safety, conv, env)
 
 
 def seed_regions():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM region_stats")
-
-    for ward, slug, safety, conv, env in TOKYO_WARDS:
-        rent_1ldk, rent_1k = fetch_avg_rent("tokyo", slug)
-        rent = rent_1ldk or rent_1k
-        print(f"東京都 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
-        _insert(conn, "東京都", None, ward, rent, safety, conv, env)
-
-    for ward, slug, safety, conv, env in YOKOHAMA_WARDS:
-        rent_1ldk, rent_1k = fetch_avg_rent("kanagawa", slug)
-        rent = rent_1ldk or rent_1k
-        print(f"横浜市 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
-        _insert(conn, "神奈川県", "横浜市", ward, rent, safety, conv, env)
-
-    for ward, slug, safety, conv, env in KAWASAKI_WARDS:
-        rent_1ldk, rent_1k = fetch_avg_rent("kanagawa", slug)
-        rent = rent_1ldk or rent_1k
-        print(f"川崎市 {ward}: 1LDK={rent_1ldk} 1K={rent_1k} -> {rent}")
-        _insert(conn, "神奈川県", "川崎市", ward, rent, safety, conv, env)
-
-    major = [
-        ("大阪府", None, "大阪市", 95000, "中", "高", "中"),
-        ("京都府", None, "京都市", 92000, "高", "高", "高"),
-        ("兵庫県", None, "神戸市", 98000, "高", "高", "高"),
-        ("愛知県", None, "名古屋市", 85000, "中", "高", "中"),
-        ("北海道", None, "札幌市", 72000, "高", "高", "高"),
-        ("福岡県", None, "福岡市", 82000, "中", "高", "中"),
-        ("宮城県", None, "仙台市", 75000, "高", "高", "高"),
-        ("広島県", None, "広島市", 78000, "中", "高", "高"),
-    ]
-    for pref, city, ward, rent, safety, conv, env in major:
-        _insert(conn, pref, city, ward, rent, safety, conv, env)
-
-    conn.commit()
-    count = conn.execute("SELECT COUNT(*) FROM region_stats").fetchone()[0]
-    conn.close()
-    print(f"\nSeeded {count} region stats")
+    """Explicit CLI refresh. Failed fetches preserve previous rents and public data."""
+    from scripts.init_db import init_db
+    from scrapers.base import fetch_html
+    from datetime import datetime
+    init_db(DB_PATH)
+    seed_region_catalog()
+    for pref, city, ward, safety, conv, env, url in _regional_rows():
+        html = fetch_html(url)
+        if not html:
+            print(f"{ward}: unavailable; keeping previous data")
+            continue
+        rents, fee_basis = parse_rent_benchmarks(html)
+        if not rents:
+            continue
+        now = datetime.now().isoformat()
+        with sqlite3.connect(DB_PATH) as conn:
+            rid = conn.execute("SELECT id FROM region_stats WHERE prefecture=? AND city IS ? AND ward=?",
+                               (pref, city, ward)).fetchone()[0]
+            for layout, rent in rents.items():
+                conn.execute("""INSERT INTO region_rent_benchmarks
+                    (region_id, layout, rent, includes_management_fee, source_url, fetched_at)
+                    VALUES (?,?,?,?,?,?) ON CONFLICT(region_id,layout) DO UPDATE SET
+                    rent=excluded.rent, includes_management_fee=excluded.includes_management_fee,
+                    source_url=excluded.source_url, fetched_at=excluded.fetched_at""",
+                    (rid, layout, rent, fee_basis, url, now))
+            if "1LDK" in rents:
+                conn.execute("UPDATE region_stats SET avg_rent=?, rent_layout='1LDK', "
+                             "rent_source=?, rent_fetched_at=? WHERE id=?", (rents["1LDK"], url, now, rid))
+        print(f"{ward}: {len(rents)} layouts updated")
 
 
 def _insert(conn, pref, city, ward, rent, safety, conv, env):
-    from datetime import datetime
     conn.execute("""INSERT INTO region_stats
         (prefecture, city, ward, avg_rent, avg_area, avg_building_age,
-         safety_level, convenience_level, environment_level, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (pref, city, ward, rent, 40.0, 25, safety, conv, env, datetime.now().isoformat()))
+         safety_level, convenience_level, environment_level, rent_source, stats_method)
+        VALUES (?,?,?,?,NULL,NULL,?,?,?,?,?)""",
+        (pref, city, ward, rent, safety, conv, env, "manual_estimate" if rent else "unverified", "manual_levels"))
 
 
 def _major_rows():
@@ -160,10 +164,8 @@ def _major_rows():
 def seed_missing_regions():
     """一覧に増えたエリアのうち、まだ無いものだけを足す。
 
-    seed_regions() は最初に region_stats を空にして相場を取り直すため、
-    公的データ(取引価格・災害)を消さないよう「テーブルが空のときだけ」動く。
-    その結果、一覧にエリアを足しても既存環境には永久に反映されなかった。
-    ここは既存行に触れず、不足分を入れるだけ。通信もしない。
+    既存の相場・公的データには触れず、手動概算の主要都市を補充する。
+    区単位の空行は seed_region_catalog() が通信なしで追加する。
     """
     conn = sqlite3.connect(DB_PATH)
     # 同じ都市が (city=大阪市, ward=NULL) と (city=NULL, ward=大阪市) の
@@ -178,8 +180,6 @@ def seed_missing_regions():
             _insert(conn, pref, city, ward, rent, safety, conv, env)
             have.add((pref, label))
             added.append(label)
-    # 区単位のエリアは相場を取得しないと入れられないので、ここでは足さない
-    # (空DBなら seed_regions() が走るため、実際に欠けるのは主要都市だけ)
     conn.commit()
     conn.close()
     if added:

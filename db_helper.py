@@ -16,7 +16,7 @@ def get_conn():
 
 
 @contextmanager
-def transaction():
+def transaction(immediate=False):
     """複数の書き込みを1つの接続・1つのトランザクションで行う。
 
     途中で失敗したらロールバックする。物件の削除のように複数テーブルを
@@ -25,6 +25,8 @@ def transaction():
     """
     conn = get_conn()
     try:
+        if immediate:
+            conn.execute("BEGIN IMMEDIATE")
         yield conn
         conn.commit()
     except Exception:
@@ -36,22 +38,21 @@ def transaction():
 
 def query_all(sql, args=()):
     conn = get_conn()
-    rows = conn.execute(sql, args).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    try:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    finally:
+        conn.close()
 
 
 def query_one(sql, args=()):
     conn = get_conn()
-    row = conn.execute(sql, args).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    try:
+        row = conn.execute(sql, args).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def execute(sql, args=()):
-    conn = get_conn()
-    cur = conn.execute(sql, args)
-    conn.commit()
-    last_id = cur.lastrowid
-    conn.close()
-    return last_id
+    with transaction() as conn:
+        return conn.execute(sql, args).lastrowid

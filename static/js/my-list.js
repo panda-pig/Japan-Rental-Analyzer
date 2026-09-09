@@ -11,25 +11,11 @@ const BASE_OPT = {
     extraCssText: 'box-shadow: 0 2px 8px rgba(16,24,40,0.08); border-radius: 8px;' },
 };
 
-// 破壊的な操作は ADMIN_TOKEN を設定した環境ではトークンを要求される。
-// 401 が返ったら一度だけ入力を求め、通ったら localStorage に覚える。
-const ADMIN_KEY = 'adminToken';
-async function adminFetch(url, opts = {}) {
-  const send = t => fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), ...(t ? { 'X-Admin-Token': t } : {}) },
-  });
-  let res = await send(localStorage.getItem(ADMIN_KEY) || '');
-  if (res.status !== 401) return res;
-  const token = window.prompt('この操作には管理トークンが必要です。');
-  if (!token) return res;
-  res = await send(token);
-  if (res.ok) localStorage.setItem(ADMIN_KEY, token);
-  else localStorage.removeItem(ADMIN_KEY);
-  return res;
-}
+const { adminFetch } = Rental;
 
-const state = { data: null, selectedId: null, sort: 'score_desc' };
+const state = { data: null, selectedId: null, sort: 'score_desc', compareIds: new Set(Rental.readCompareIds()) };
+let renderVersion = 0;
+let loadVersion = 0;
 const regionCache = {};
 
 const chartRegistry = {};
@@ -52,7 +38,7 @@ function chartA11y(el, label) {
   el.setAttribute('role', 'img');
   el.setAttribute('aria-label', label);
 }
-const yen = v => (v || 0).toLocaleString() + '円';
+const yen = Rental.money;
 const unit = u => `<span style="font-size:14px;">${u}</span>`;
 
 // スクレイプ由来の文字列(物件名・エリア・駅名など)はそのまま innerHTML に入れない。
@@ -60,6 +46,7 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
 
 function safeUrl(u) {
+  if (typeof u !== 'string' || !u.trim()) return '';
   try {
     const p = new URL(u, location.origin);
     return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
@@ -90,7 +77,7 @@ async function importAndAnalyze() {
   if (btn) { btn.disabled = true; btn.textContent = '解析中…'; }
   setImportMsg('解析中… ページを取得しています(数秒かかります)', 'busy');
   try {
-    const res = await fetch('/api/import/detail', {
+    const res = await adminFetch('/api/import/detail', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
@@ -112,6 +99,7 @@ async function importAndAnalyze() {
       document.getElementById('import-url').value = '';
       if (d.id) state.selectedId = d.id;
       await loadAnalysis();
+      handleEnrichment(d.id, d.enrichment_status);
     }
   } catch (e) {
     setImportMsg('通信エラー: ' + e.message, 'error');
@@ -139,32 +127,36 @@ function toast(msg, ok = true) {
 }
 
 async function loadAnalysis() {
+  const version = ++loadVersion;
   const container = document.getElementById('analysis-container');
   if (container && !state.data) {
     container.innerHTML = '<div class="empty-state">読み込み中…</div>';
   }
-  const res = await fetch('/api/my-list');
-  state.data = await res.json();
+  const data = await Rental.requestJSON('/api/my-list');
+  if (version !== loadVersion) return;
+  state.data = data;
   const pool = state.data.compare_rows || [];
+  state.compareIds = new Set([...state.compareIds].filter(id => pool.some(l => l.id === id)));
+  localStorage.setItem('compareIds', JSON.stringify([...state.compareIds]));
   if (!pool.some(l => l.id === state.selectedId)) {
     state.selectedId = pool.length ? pool[0].id : null;
   }
   await render();
 }
 
-async function getRegion(ward) {
-  if (!ward) return null;
-  if (ward in regionCache) return regionCache[ward];
+async function getRegion(regionId) {
+  if (!regionId) return null;
+  if (regionId in regionCache) return regionCache[regionId];
   try {
-    const r = await fetch('/api/regions/' + encodeURIComponent(ward));
-    regionCache[ward] = r.ok ? await r.json() : null;
-  } catch (e) { regionCache[ward] = null; }
-  return regionCache[ward];
+    const r = await fetch('/api/regions/id/' + encodeURIComponent(regionId));
+    if (r.ok) return regionCache[regionId] = await r.json();
+  } catch (e) { /* A later selection can retry a temporary failure. */ }
+  return null;
 }
 
 function deviationOf(l) {
-  if (l.total_monthly_cost && l.region_avg_rent)
-    return (l.total_monthly_cost - l.region_avg_rent) / l.region_avg_rent;
+  if (l.region_comparison_cost != null && l.region_avg_rent)
+    return (l.region_comparison_cost - l.region_avg_rent) / l.region_avg_rent;
   return null;
 }
 
@@ -181,24 +173,34 @@ function sortPool(rows) {
 }
 
 async function render() {
+  const version = ++renderVersion;
   const container = document.getElementById('analysis-container');
   const d = state.data;
-  if (!d || !d.total) { await renderEmpty(container); return; }
+  if (!d || !d.total) { await renderEmpty(container, version); return; }
 
   const pool = d.compare_rows || [];
   const selected = pool.find(l => l.id === state.selectedId) || pool[0];
   state.selectedId = selected ? selected.id : null;
-  const region = selected ? await getRegion(selected.ward) : null;
+  const region = selected ? await getRegion(selected.region_id) : null;
 
+  if (version !== renderVersion) return;
+  const focusedRow = document.activeElement?.closest?.('.pool-row')?.dataset.id;
+  for (const chart of Object.values(chartRegistry)) { if (!chart.isDisposed()) chart.dispose(); }
   container.innerHTML = reportHtml(selected, region) +
     wordCloudHtml(d) +
     (pool.length ? poolHtml(sortPool(pool), d) : '');
 
+  wirePoolHandlers();
+  updateCompareBtn();
+  if (focusedRow) container.querySelector(`[data-id="${Number(focusedRow)}"]`)?.focus({preventScroll: true});
+  if (typeof echarts === 'undefined') {
+    document.querySelectorAll('.chart').forEach(el => chartEmpty(el, 'グラフを読み込めませんでした。数値はレポートで確認できます。'));
+    return;
+  }
   drawReportCharts(selected, region, d.prefs);
   drawWordCloud(d.feature_cloud);
   drawLayoutPie(d.layout_dist);
   if (pool.length >= 2) drawScatter(d.scatter_data);
-  wirePoolHandlers();
 }
 
 function wordCloudHtml(d) {
@@ -267,15 +269,16 @@ function drawWordCloud(cloud) {
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 20px;padding:24px 8px;min-height:180px;">${chips}</div>`;
 }
 
-async function renderEmpty(container) {
+async function renderEmpty(container, version) {
   let d = null;
-  try { d = await (await fetch('/api/dashboard')).json(); } catch (e) {}
+  try { d = await Rental.requestJSON('/api/dashboard'); } catch (e) {}
+  if (version !== renderVersion) return;
   if (!d) { container.innerHTML = '<div class="empty-state">物件をインポートすると分析が表示されます。</div>'; return; }
 
   const regionRows = (d.regions || []).slice(0, 30).map(r => `
     <tr>
       <td style="font-weight:600;color:var(--text-primary);">${r.ward || r.city || r.prefecture || '-'}</td>
-      <td>${(r.avg_rent || 0).toLocaleString()}円</td>
+      <td>${yen(r.avg_rent)}<br><small>${esc(r.rent_layout || '間取り未確認')} / ${r.rent_source === 'manual_estimate' ? '手動概算' : r.rent_layout ? '取得値' : '出典・時点未確認'}</small></td>
       <td>${r.avg_area || '-'}㎡</td>
       <td>${r.safety_level || '-'}</td>
       <td>${r.convenience_level || '-'}</td>
@@ -302,6 +305,7 @@ async function renderEmpty(container) {
       </div>
     </div>`;
 
+  if (typeof echarts === 'undefined') return;
   drawRegionBar('chart-tokyo', d.tokyo_region_rent);
   drawRegionBar('chart-yokohama', d.yokohama_region_rent);
 }
@@ -344,17 +348,18 @@ const AMENITIES = [
 
 function reportHtml(l, region) {
   if (!l) return '';
-  const yen = v => (v || 0).toLocaleString() + '円';
+  const yen = Rental.money;
   const dev = deviationOf(l);
 
-  let rentLabel = '<div class="label">月額</div>';
+  let rentLabel = '<div class="label">月額（管理費込み）</div>';
   let rentCls = '';
   if (dev != null) {
-    const diff = l.total_monthly_cost - l.region_avg_rent;
+    const diff = l.region_comparison_cost - l.region_avg_rent;
     rentCls = dev < 0 ? 'good' : '';
     const col = diff > 0 ? 'var(--bad)' : 'var(--good)';
-    rentLabel = `<div class="label">エリア平均比 <span class="dev-badge ${diff > 0 ? 'pricey' : 'cheap'}">${diff > 0 ? '+' : ''}${Math.round(dev * 100)}%</span> <span style="color:${col};">${diff > 0 ? '+' : ''}${(diff / 10000).toFixed(1)}万</span></div>`;
+    rentLabel += `<div class="label">比較家賃 ${yen(l.region_comparison_cost)}<br>相場比 <span class="dev-badge ${diff > 0 ? 'pricey' : 'cheap'}">${diff > 0 ? '+' : ''}${Math.round(dev * 100)}%</span> <span style="color:${col};">${diff > 0 ? '+' : ''}${(diff / 10000).toFixed(1)}万</span></div>`;
   }
+  const benchmarkNote = `<p class="page-subtitle">${esc(l.benchmark_note || '')}${l.benchmark_fetched_at ? ' / 更新 ' + esc(l.benchmark_fetched_at.slice(0, 10)) : ''}${safeUrl(l.benchmark_source) ? ` / <a href="${esc(safeUrl(l.benchmark_source))}" target="_blank" rel="noopener">出典</a>` : ''}</p>`;
   const areaLabel = l.region_avg_area ? `エリア平均 ${l.region_avg_area}㎡` : '専有面積';
 
   const metrics = `
@@ -372,7 +377,7 @@ function reportHtml(l, region) {
   const P = (state.data && state.data.prefs) || {};
   const ACHV = [
     ['予算内', !!(l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000))],
-    ['コスパ良', !!(l.total_monthly_cost && l.region_avg_rent && l.total_monthly_cost < l.region_avg_rent)],
+    ['コスパ良', !!(l.total_monthly_cost && l.region_avg_rent && l.region_comparison_cost < l.region_avg_rent)],
     ['広め', !!(l.area_m2 && l.area_m2 >= (P.ideal_area_m2 || 40))],
     ['築浅', l.building_age != null && l.building_age <= 10],
     ['駅徒歩10分以内', l.walk_minutes != null && l.walk_minutes <= 10],
@@ -413,6 +418,7 @@ function reportHtml(l, region) {
         </div>
       </div>
       ${metrics}
+      ${benchmarkNote}
       <div style="margin-top:16px;">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">条件クリア <span style="color:var(--good);">${achvOk}</span><span style="font-weight:400;">/${ACHV.length}</span></div>
         ${achievementChips}
@@ -439,7 +445,7 @@ function reportHtml(l, region) {
       : '';
     html += `
     <div class="card">
-      <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2>
+      <h2>エリア評価 <span class="tag muted">エリア参考値・スコア対象外</span></h2><p class="page-subtitle">治安・便利・住環境は手動の参考評価です。</p>
       <div class="metric-grid" style="margin-top:12px;">
         ${sc(region.overall_score, '総合評価')}
         ${lv(region.safety_level, '治安')}
@@ -458,7 +464,7 @@ function reportHtml(l, region) {
       `<div class="metric"><div class="num" style="font-size:22px;color:${starColor(v)};">${v.toFixed(1)}</div><div class="label">${label} /5</div></div>`;
     html += `
     <div class="card">
-      <h2>最寄駅の住民評価 <span class="tag muted">${l.st_station || ''}駅・スコア対象外</span></h2>
+      <h2>最寄駅の住民評価 <span class="tag muted">${esc(l.st_station || '')}駅・スコア対象外</span></h2>
       <div class="metric-grid" style="margin-top:12px;">
         ${stM(l.st_avg, '総合')}
         ${stM(l.st_transport, '交通の利便性')}
@@ -472,16 +478,16 @@ function reportHtml(l, region) {
   }
 
   if (l.total_score != null) {
-    html += `<div class="card"><h2>スコアレーダー <span style="font-size:12px;font-weight:400;color:var(--text-muted);">8次元評価</span></h2><div id="chart-radar-single" class="chart"></div></div>`;
+    html += `<div class="card"><h2>スコアレーダー <span style="font-size:12px;font-weight:400;color:var(--text-muted);">取得済みの評価項目</span></h2><div id="chart-radar-single" class="chart"></div></div>`;
     html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;
-    if (l.region_avg_rent && l.total_monthly_cost)
+    if (l.region_avg_rent && l.region_comparison_cost != null)
       html += `<div class="card"><h2>エリア平均との比較</h2><div id="chart-compare-bar" class="chart"></div></div>`;
     const hist = (state.data.price_history || []).filter(h => h.id === l.id);
     if (hist.length >= 2)
       html += `<div class="card"><h2>価格推移 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">再取得の履歴</span></h2><div id="chart-price-history" class="chart"></div></div>`;
     html += `<div class="card"><h2>推薦理由</h2>
       <div style="background:var(--good-bg);border:1px solid var(--good-border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--good);">
-        ${l.score_reason || 'スコア理由がありません'}
+        ${esc(l.score_reason || 'スコア理由がありません')}
       </div></div>`;
   }
 
@@ -505,13 +511,16 @@ function drawReportCharts(l, region, prefs) {
   }
   const rEl = document.getElementById('chart-radar-single');
   if (rEl) {
-    const DIMS = [
+    let DIMS = [
       { name: '予算', max: 20 }, { name: '面積', max: 15 }, { name: '通勤', max: 15 },
       { name: '階数', max: 10 }, { name: 'ペット', max: 15 }, { name: '駅距離', max: 10 },
       { name: '築年数', max: 10 }, { name: '初期費用', max: 5 },
     ];
-    const vals = [l.budget_score || 0, l.area_score || 0, l.commute_score || 0, l.floor_score || 0,
-                  l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score || 0];
+    let vals = [l.budget_score || 0, l.area_score || 0, l.commute_score || 0, l.floor_score || 0,
+                  l.pet_score || 0, l.station_score || 0, l.age_score || 0, l.initial_cost_score];
+    const indices = DIMS.map((_, i) => i).filter(i => (i !== 2 || l.commute_resolved) && vals[i] != null);
+    DIMS = DIMS.filter((_, i) => indices.includes(i));
+    vals = vals.filter((_, i) => indices.includes(i));
     chartA11y(rEl, `8次元スコアのレーダーチャート。総合${l.total_score}点。` +
       DIMS.map((d, i) => `${d.name}${vals[i]}/${d.max}`).join('、') + '。');
     initChart(rEl).setOption({
@@ -532,7 +541,9 @@ function drawReportCharts(l, region, prefs) {
     });
   }
   const iEl = document.getElementById('chart-initcost');
-  if (iEl) {
+  if (iEl && l.initial_cost_estimate == null) {
+    chartEmpty(iEl, '敷金・礼金などが未取得のため、概算合計は計算できません');
+  } else if (iEl) {
     const p = prefs || { broker_fee_rate: 0.55, prepaid_rent_months: 1, misc_cost: 40000 };
     const rent = l.rent || 0;
     const parts = [
@@ -559,18 +570,18 @@ function drawReportCharts(l, region, prefs) {
     });
   }
   const bEl = document.getElementById('chart-compare-bar');
-  if (bEl && l.region_avg_rent && l.total_monthly_cost) {
-    const diff = l.total_monthly_cost - l.region_avg_rent;
-    chartA11y(bEl, `月額とエリア平均の比較(棒グラフ)。この物件${yen(l.total_monthly_cost)}、` +
+  if (bEl && l.region_avg_rent && l.region_comparison_cost != null) {
+    const diff = l.region_comparison_cost - l.region_avg_rent;
+    chartA11y(bEl, `同じ間取り・費用条件での家賃比較(棒グラフ)。この物件${yen(l.region_comparison_cost)}、` +
       `エリア平均${yen(l.region_avg_rent)}。エリア平均より${yen(Math.abs(diff))}${diff > 0 ? '高い' : '安い'}。`);
     initChart(bEl).setOption({
       ...BASE_OPT,
       xAxis: { type: 'category', data: ['この物件', 'エリア平均'] },
-      yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted } },
+      yAxis: { type: 'value', name: '家賃(円)', axisLabel: { color: COLORS.muted } },
       series: [{
         type: 'bar', barMaxWidth: 80,
         data: [
-          { value: l.total_monthly_cost, itemStyle: { color: COLORS.primary } },
+          { value: l.region_comparison_cost, itemStyle: { color: COLORS.primary } },
           { value: l.region_avg_rent, itemStyle: { color: COLORS.warn } },
         ],
         label: { show: true, formatter: p => p.value.toLocaleString() + '円', fontFamily: CHART_FONT, fontSize: 12 },
@@ -607,10 +618,10 @@ async function refreshListing(id) {
   const btn = document.getElementById('report-refresh');
   if (btn) { btn.disabled = true; btn.textContent = '取得中…'; }
   try {
-    const res = await fetch('/api/listings/' + id + '/refresh', { method: 'POST' });
+    const res = await adminFetch('/api/listings/' + id + '/refresh', { method: 'POST' });
     const d = await res.json();
     if (!res.ok || d.error) { toast(d.error || '再取得に失敗しました', false); }
-    else { toast(d.message || '更新しました', !d.price_changed ? true : true); await loadAnalysis(); }
+    else { toast(d.message || '更新しました'); await loadAnalysis(); handleEnrichment(id, d.enrichment_status); }
   } catch (e) { toast('通信エラー: ' + e.message, false); }
   finally { const b = document.getElementById('report-refresh'); if (b) { b.disabled = false; b.textContent = '価格を再取得'; } }
 }
@@ -640,11 +651,11 @@ function poolHtml(pool, d) {
     const favMark = l.fav_status ? `<span class="fav-star" title="${esc(l.fav_status)}">★</span>` : '';
     const title = esc(l.title || '(名称未設定)');
     return `<tr data-id="${l.id}" class="pool-row"${sel} tabindex="0" role="button" aria-label="${title} のレポートを表示">
-      <td><input type="checkbox" class="pool-check" data-id="${l.id}" aria-label="${title} を比較に追加"></td>
+      <td><input type="checkbox" class="pool-check" data-id="${l.id}" ${state.compareIds.has(l.id) ? 'checked' : ''} aria-label="${title} を比較に追加"></td>
       <td><span class="${badgeCls(l.total_score)}">${l.total_score ?? '-'}</span></td>
       <td style="font-weight:600;color:var(--text-primary);">${esc(l.title || '')} ${favMark}</td>
       <td>${esc(l.ward || '-')}</td>
-      <td>${(l.total_monthly_cost || 0).toLocaleString()}円</td>
+      <td>${yen(l.total_monthly_cost)}</td>
       <td>${l.area_m2 || '?'}㎡</td>
       <td>${devHtml}</td>
       <td><button class="link-btn pool-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">${l.fav_status ? '解除' : '気になる'}</button></td>
@@ -683,7 +694,7 @@ function drawLayoutPie(dist) {
     dist.map(x => `${x.name}${x.value}件`).join('、') + '。');
   initChart(el).setOption({
     ...BASE_OPT,
-    tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.name}: ${p.value}件 (${p.percent}%)` },
+    tooltip: { ...BASE_OPT.tooltip, formatter: p => `${esc(p.name)}: ${p.value}件 (${p.percent}%)` },
     legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: COLORS.text, fontFamily: CHART_FONT, fontSize: 12 } },
     series: [{
       type: 'pie', radius: ['42%', '68%'], center: ['38%', '50%'], avoidLabelOverlap: true,
@@ -701,15 +712,9 @@ function drawScatter(scatter) {
   const pts = scatter.filter(p => p.x && p.y);
   chartA11y(el, `コスパ散布図。横軸が面積、縦軸が月額で、${pts.length}件を表示。` +
     pts.map(p => `${p.name}は${p.x}㎡ ${yen(p.y)}`).join('、') + '。');
-  const avgLine = [];
-  const withAvg = pts.filter(p => p.region_avg);
-  if (withAvg.length) {
-    const avg = withAvg.reduce((s, p) => s + p.region_avg, 0) / withAvg.length;
-    avgLine.push({ yAxis: avg, label: { formatter: 'エリア平均 ' + Math.round(avg / 10000) + '万', color: COLORS.warn } });
-  }
   initChart(el).setOption({
     ...BASE_OPT,
-    tooltip: { ...BASE_OPT.tooltip, formatter: p => `${p.data.name}<br>${p.data.ward || ''}<br>面積 ${p.data.value[0]}㎡ / 月額 ${p.data.value[1].toLocaleString()}円` },
+    tooltip: { ...BASE_OPT.tooltip, formatter: p => `${esc(p.data.name)}<br>${esc(p.data.ward || '')}<br>面積 ${p.data.value[0]}㎡ / 月額 ${p.data.value[1].toLocaleString()}円` },
     grid: { left: 60, right: 30, top: 34, bottom: 40 },
     xAxis: { type: 'value', name: '面積(㎡)', axisLabel: { color: COLORS.muted } },
     yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
@@ -717,34 +722,39 @@ function drawScatter(scatter) {
       type: 'scatter', symbolSize: 14,
       itemStyle: { color: COLORS.primary, opacity: 0.75 },
       data: pts.map(p => ({ value: [p.x, p.y], name: p.name, ward: p.ward })),
-      markLine: avgLine.length ? { silent: true, symbol: 'none', lineStyle: { color: COLORS.warn, type: 'dashed' }, data: avgLine } : undefined,
     }],
   });
 }
 
 function updateCompareBtn() {
-  const checked = document.querySelectorAll('.pool-check:checked');
+  const checked = [...state.compareIds];
   const btn = document.getElementById('pool-compare');
   if (!btn) return;
   btn.textContent = `選択して比較 (${checked.length})`;
   btn.disabled = checked.length < 2 || checked.length > 4;
 }
 
+const pendingFavorites = new Set();
 async function toggleFav(id, favId) {
-  if (favId) {
-    await fetch('/api/status/' + favId, { method: 'DELETE' });
-  } else {
-    await fetch('/api/status', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ listing_id: id, status: '気になる', priority: 1 }),
-    });
-  }
-  await loadAnalysis();
+  if (pendingFavorites.has(id)) return;
+  pendingFavorites.add(id);
+  try {
+    if (favId) {
+      await Rental.requestJSON('/api/status/' + favId, { method: 'DELETE' });
+    } else {
+      await Rental.requestJSON('/api/status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: id, status: '気になる', priority: 1 }),
+      });
+    }
+    await loadAnalysis();
+  } catch (error) { toast(error.message, false); }
+  finally { pendingFavorites.delete(id); }
 }
 
 function wirePoolHandlers() {
   document.querySelectorAll('.pool-row').forEach(tr => {
-    const select = () => { state.selectedId = parseInt(tr.dataset.id, 10); render(); };
+    const select = () => { state.selectedId = parseInt(tr.dataset.id, 10); render().catch(e => toast(e.message, false)); };
     tr.addEventListener('click', e => {
       if (e.target.closest('input,button,a')) return;
       select();
@@ -754,7 +764,13 @@ function wirePoolHandlers() {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
     });
   });
-  document.querySelectorAll('.pool-check').forEach(cb => cb.addEventListener('change', updateCompareBtn));
+  document.querySelectorAll('.pool-check').forEach(cb => cb.addEventListener('change', () => {
+    const id = Number(cb.dataset.id);
+    if (cb.checked && state.compareIds.size >= 4) { cb.checked = false; toast('比較は4件まで選択できます', false); return; }
+    if (cb.checked) state.compareIds.add(id); else state.compareIds.delete(id);
+    localStorage.setItem('compareIds', JSON.stringify([...state.compareIds]));
+    updateCompareBtn();
+  }));
   document.querySelectorAll('.pool-fav').forEach(b =>
     b.addEventListener('click', e => { e.stopPropagation(); toggleFav(parseInt(b.dataset.id, 10), b.dataset.favid || null); }));
   const reportFav = document.getElementById('report-fav');
@@ -772,7 +788,12 @@ function wirePoolHandlers() {
     location.href = '/compare';
   });
   const sortSel = document.getElementById('pool-sort');
-  if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value; render(); });
+  if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value;
+    const tbody = document.querySelector('#pool-table tbody');
+    for (const l of sortPool(state.data.compare_rows)) {
+      const row = tbody.querySelector(`[data-id="${l.id}"]`);
+      if (row) tbody.appendChild(row);
+    } });
 
   const clearBtn = document.getElementById('pool-clear');
   if (clearBtn) clearBtn.addEventListener('click', async () => {
@@ -798,5 +819,30 @@ window.addEventListener('resize', () => {
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('import-url');
   if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') importAndAnalyze(); });
-  loadAnalysis();
+  loadAnalysis().catch(e => Rental.showError('analysis-container', e));
 });
+
+const enrichmentWatchers = new Map();
+function handleEnrichment(id, status) {
+  if (status === 'pending') watchEnrichment(id);
+  else if (status === 'deferred') setImportMsg('基本レポートを保存しました。追加取得が混み合っています。後で価格を再取得すると再試行できます。', 'ok');
+}
+function watchEnrichment(id) {
+  if (enrichmentWatchers.has(id)) return;
+  setImportMsg('基本レポートを表示しました。通勤・住民評価を追加取得しています…', 'busy');
+  let attempts = 0;
+  const poll = async () => {
+    try {
+      const result = await Rental.requestJSON(`/api/listings/${id}/enrichment`);
+      if (result.status === 'pending' && ++attempts < 40) {
+        enrichmentWatchers.set(id, setTimeout(poll, 3000));
+        return;
+      }
+      enrichmentWatchers.delete(id);
+      await loadAnalysis();
+      setImportMsg(result.status === 'complete' ? '追加情報の取得処理が完了しました。取得できた項目を反映しました。' :
+        '追加情報の取得が未完了です。必要に応じて価格を再取得してください。', result.status === 'complete' ? 'ok' : 'error');
+    } catch (error) { enrichmentWatchers.delete(id); setImportMsg(error.message, 'error'); }
+  };
+  enrichmentWatchers.set(id, setTimeout(poll, 2000));
+}

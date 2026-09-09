@@ -1,21 +1,3 @@
-// 破壊的な操作は ADMIN_TOKEN を設定した環境ではトークンを要求される。
-// 401 が返ったら一度だけ入力を求め、通ったら localStorage に覚える。
-const ADMIN_KEY = 'adminToken';
-async function adminFetch(url, opts = {}) {
-  const send = t => fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), ...(t ? { 'X-Admin-Token': t } : {}) },
-  });
-  let res = await send(localStorage.getItem(ADMIN_KEY) || '');
-  if (res.status !== 401) return res;
-  const token = window.prompt('この操作には管理トークンが必要です。');
-  if (!token) return res;
-  res = await send(token);
-  if (res.ok) localStorage.setItem(ADMIN_KEY, token);
-  else localStorage.removeItem(ADMIN_KEY);
-  return res;
-}
-
 const WEIGHT_FIELDS = [["budget_weight", "予算"], ["area_weight", "面積"], ["commute_weight", "通勤"],
   ["floor_weight", "階数"], ["pet_weight", "ペット"], ["station_weight", "駅距離"],
   ["age_weight", "築年数"], ["initial_cost_weight", "初期費用"]];
@@ -37,7 +19,7 @@ function toast(msg, ok = true) {
 }
 
 async function load() {
-  const p = await (await fetch("/api/preferences")).json();
+  const p = await Rental.requestJSON("/api/preferences");
   const set = (id, v) => document.getElementById(id).value = v ?? "";
   set("p_max_cost", p.max_total_monthly_cost);
   set("p_min_area", p.min_area_m2);
@@ -50,7 +32,7 @@ async function load() {
   set("p_prepaid", p.prepaid_rent_months);
   set("p_misc", p.misc_cost);
   document.getElementById("weights").innerHTML = WEIGHT_FIELDS.map(([k, l]) =>
-    `<div><label for="w_${k}">${l}</label><input type="number" id="w_${k}" value="${p[k]}" oninput="updateTotal()"></div>`).join("");
+    `<div><label for="w_${k}">${l}</label><input type="number" id="w_${k}" min="0" max="100" value="${Rental.esc(p[k])}" oninput="updateTotal()"></div>`).join("");
   updateTotal();
 }
 
@@ -68,21 +50,26 @@ function collect() {
 }
 
 async function persist() {
-  const res = await adminFetch("/api/preferences", {
+  return Rental.requestJSON("/api/preferences", {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collect()),
   });
-  return res.ok;
 }
 
-async function save() {
-  toast(await persist() ? "保存しました" : "保存できませんでした");
+let saving = false;
+async function save(recalculate = false) {
+  if (saving) return;
+  saving = true;
+  try {
+    toast('保存中…');
+    await persist();
+    if (recalculate) {
+      const result = await Rental.requestJSON('/api/scores/recalculate', { method: 'POST' });
+      toast(result.deferred ? `スコアを更新しました。追加取得の待機枠が満杯です。残り${result.deferred}件は後で再試行してください。` :
+        result.pending ? 'スコアを更新しました。通勤・住民評価は追加取得中です。' : 'スコアを更新しました');
+    } else toast('保存してスコアを更新しました');
+  } catch (error) { toast(error.message, false); }
+  finally { saving = false; }
 }
 
-async function recalc() {
-  if (!await persist()) { toast("保存できませんでした"); return; }
-  toast("保存して再計算中…");
-  const res = await adminFetch("/api/scores/recalculate", { method: "POST" });
-  toast(res.ok ? "再計算が完了しました" : "再計算できませんでした");
-}
-
-load();
+function recalc() { return save(true); }
+load().catch(error => toast(error.message, false));

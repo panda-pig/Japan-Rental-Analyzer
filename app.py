@@ -1,24 +1,20 @@
 from flask import Flask, jsonify, request, render_template
 from db_helper import query_all, query_one, execute
+from core.validation import preferences as validate_preferences, status_fields
+from services.regions import attach_benchmarks
+from werkzeug.exceptions import HTTPException
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scripts.init_db import init_db
-from scripts.seed_regions import seed_regions, seed_missing_regions, dedupe_regions
+from scripts.seed_regions import seed_region_catalog, dedupe_regions
 
 app = Flask(__name__)
 
 init_db()
-from db_helper import query_one, execute as _execute
-if query_one("SELECT COUNT(*) AS c FROM region_stats")["c"] == 0:
-    seed_regions()
-else:
-    # 表示名で照合していなかった頃の補充で作られた重複を先に片付ける
-    dedupe_regions()
-    # 一覧に増えたエリアを既存環境にも反映する(既存行と公的データには触れない)
-    seed_missing_regions()
-_execute("DELETE FROM region_stats WHERE ward IS NULL AND city IS NULL")
+dedupe_regions()
+seed_region_catalog()
 
 
 _COMPRESSIBLE = ("application/json", "text/css", "application/javascript",
@@ -81,18 +77,9 @@ app.jinja_env.globals["asset_v"] = asset_v
 # ADMIN_TOKEN を設定した環境でのみ要求する(未設定ならローカル開発として素通し)。
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
-_PROTECTED = (
-    ("POST", "/api/pool/clear"),
-    ("POST", "/api/scores/recalculate"),
-    ("PUT", "/api/preferences"),
-)
-
-
 def _needs_admin():
-    p, m = request.path, request.method
-    if (m, p) in _PROTECTED:
-        return True
-    return m == "DELETE" and p.startswith("/api/listings/")
+    return (request.url_rule is not None and request.path.startswith("/api/")
+            and request.method in ("POST", "PUT", "PATCH", "DELETE"))
 
 
 @app.before_request
@@ -106,27 +93,23 @@ def _guard_admin():
     return jsonify({"error": "この操作には管理トークンが必要です。"}), 401
 
 
-def _refresh_initial_costs():
-    """保存済みの初期費用を現在の係数で計算し直す(表示箇所ごとの食い違いを防ぐ)。"""
-    from core.initial_cost import estimate_initial_cost
-    from db_helper import get_conn
-    conn = get_conn()
-    pref = conn.execute("SELECT * FROM user_preferences WHERE id=1").fetchone()
-    if not pref:
-        conn.close()
-        return
-    for l in conn.execute("SELECT id, rent, deposit, key_money, initial_cost_estimate "
-                          "FROM rental_listings WHERE is_active=1").fetchall():
-        initial = estimate_initial_cost(
-            l["rent"], l["deposit"], l["key_money"],
-            broker_fee_rate=pref["broker_fee_rate"],
-            prepaid_rent_months=pref["prepaid_rent_months"],
-            misc_cost=pref["misc_cost"])
-        if initial is not None and initial != l["initial_cost_estimate"]:
-            conn.execute("UPDATE rental_listings SET initial_cost_estimate=? WHERE id=?",
-                         (initial, l["id"]))
-    conn.commit()
-    conn.close()
+def _json_object():
+    data = request.get_json()
+    if not isinstance(data, dict):
+        raise ValueError("JSONオブジェクトを送信してください")
+    return data
+
+
+@app.errorhandler(ValueError)
+def _invalid_input(error):
+    return jsonify({"error": str(error)}), 400
+
+
+@app.errorhandler(HTTPException)
+def _http_error(error):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": error.description}), error.code
+    return error
 
 
 def _detail_parser(url):
@@ -148,47 +131,16 @@ def _detail_parser(url):
     return None
 
 
-def _score_single(listing_id):
-    """只给一条房源评分(避免全量重算超时)。"""
-    import sqlite3
-    from config import DB_PATH
-    from core.scoring import calculate_scores, ScoreInput, Weights
-    from core.commute import get_commute_minutes
-    from datetime import datetime
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    pref = conn.execute("SELECT * FROM user_preferences WHERE id=1").fetchone()
-    l = conn.execute("SELECT * FROM rental_listings WHERE id=?", (listing_id,)).fetchone()
-    if not l:
-        conn.close()
-        return
-    w = Weights(budget=pref["budget_weight"], area=pref["area_weight"],
-        commute=pref["commute_weight"], floor=pref["floor_weight"],
-        pet=pref["pet_weight"], station=pref["station_weight"],
-        age=pref["age_weight"], initial_cost=pref["initial_cost_weight"])
-    commute_minutes = None
-    if pref["target_station"] and l["nearest_station"]:
-        commute_minutes = get_commute_minutes(l["nearest_station"], pref["target_station"])
-    inp = ScoreInput(total_monthly_cost=l["total_monthly_cost"], area_m2=l["area_m2"],
-        floor=l["floor"], pet_allowed=l["pet_allowed"], walk_minutes=l["walk_minutes"],
-        building_age=l["building_age"], deposit=l["deposit"], key_money=l["key_money"], rent=l["rent"])
-    r = calculate_scores(inp, w, max_cost=pref["max_total_monthly_cost"],
-        ideal_area=pref["ideal_area_m2"], min_floor=pref["min_floor"],
-        max_walk=pref["max_walk_minutes"], max_age=pref["max_building_age"],
-        broker_rate=pref["broker_fee_rate"], prepaid=pref["prepaid_rent_months"],
-        misc=pref["misc_cost"], commute_minutes=commute_minutes,
-        min_area=pref["min_area_m2"])
-    conn.execute("DELETE FROM listing_scores WHERE listing_id=?", (listing_id,))
-    conn.execute("""INSERT INTO listing_scores
-        (listing_id, budget_score, area_score, commute_score, floor_score, pet_score,
-         station_score, age_score, initial_cost_score, feature_score, total_score,
-         score_reason, commute_minutes, commute_resolved, calculated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (listing_id, r.budget_score, r.area_score, r.commute_score, r.floor_score,
-         r.pet_score, r.station_score, r.age_score, r.initial_cost_score, r.feature_score,
-         r.total_score, r.score_reason, commute_minutes, r.commute_resolved, datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
+def _score_single(listing_id, resolve_commute=True):
+    from services.scoring import score_listing
+    return score_listing(listing_id, resolve_commute)
+
+
+def _enqueue_enrichment(listing_id):
+    if app.testing:
+        return "idle"
+    from services.enrichment import enqueue
+    return enqueue(listing_id)
 
 
 @app.route("/")
@@ -228,6 +180,10 @@ def _enrich_region(r):
     r["convenience_score"] = conv
     r["environment_score"] = env
     r["overall_score"] = round((safety + conv + env) / 3)
+    if r.get("stats_method") != "measured":
+        r["avg_area"] = None
+        r["avg_building_age"] = None
+    r["levels_note"] = "治安・便利・住環境は手動の参考評価です"
     return r
 
 
@@ -249,10 +205,11 @@ def api_dashboard():
     fav_count = query_one("SELECT COUNT(*) AS c FROM listing_status")["c"]
 
     regions = [_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC")]
-    rented = [r for r in regions if r.get("avg_rent") and r.get("prefecture") in ("東京都", "神奈川県")]
+    rented = [r for r in regions if r.get("avg_rent") and r.get("rent_layout") == "1LDK"
+              and r.get("rent_fetched_at") and r.get("prefecture") in ("東京都", "神奈川県")]
     cheapest = min(rented, key=lambda x: x["avg_rent"]) if rented else None
     priciest = max(rented, key=lambda x: x["avg_rent"]) if rented else None
-    best_value = max(rented, key=lambda x: x["overall_score"] * 100000 - x["avg_rent"]) if rented else None
+    best_value = max(rented, key=lambda x: x["overall_score"] / x["avg_rent"]) if rented else None
     area_summary = {
         "cheapest": {"ward": cheapest["ward"], "rent": cheapest["avg_rent"]} if cheapest else None,
         "priciest": {"ward": priciest["ward"], "rent": priciest["avg_rent"]} if priciest else None,
@@ -260,23 +217,23 @@ def api_dashboard():
         "rent_min": cheapest["avg_rent"] if cheapest else None,
         "rent_max": priciest["avg_rent"] if priciest else None,
     }
-    tokyo_regions = query_all("SELECT ward AS name, avg_rent AS value FROM region_stats WHERE prefecture='東京都' ORDER BY value DESC")
-    yokohama_regions = query_all("SELECT ward AS name, avg_rent AS value FROM region_stats WHERE city='横浜市' ORDER BY value DESC")
+    tokyo_regions = [{"name": r["ward"], "value": r["avg_rent"]} for r in rented if r["prefecture"] == "東京都"]
+    yokohama_regions = [{"name": r["ward"], "value": r["avg_rent"]} for r in rented if r["city"] == "横浜市"]
 
     user_ward_dist = query_all(
         "SELECT ward AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 AND ward IS NOT NULL GROUP BY ward ORDER BY value DESC")
 
     user_scatter = query_all("""SELECT l.area_m2 AS x, l.total_monthly_cost AS y,
-        l.title, l.ward, l.layout, r.avg_rent AS region_avg
-        FROM rental_listings l LEFT JOIN region_stats r ON l.ward = r.ward
+        l.title, l.ward, l.layout
+        FROM rental_listings l
         WHERE l.is_active=1""")
 
     platform_dist = query_all(
         "SELECT platform AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 GROUP BY platform")
 
-    price_drop = query_one("""SELECT COUNT(*) AS c FROM listing_price_history h
+    price_drop = query_one("""SELECT COUNT(DISTINCT l.id) AS c FROM listing_price_history h
         JOIN rental_listings l ON h.listing_id=l.id
-        WHERE l.is_active=1 AND l.total_monthly_cost < h.total_monthly_cost""")["c"]
+        WHERE l.is_active=1 AND h.observation_kind='observed' AND l.total_monthly_cost < h.total_monthly_cost""")["c"]
 
     status_dist = query_all(
         "SELECT status AS name, COUNT(*) AS value FROM listing_status GROUP BY status")
@@ -306,7 +263,17 @@ def api_regions():
 
 @app.route("/api/regions/<ward>")
 def api_region_detail(ward):
-    row = query_one("SELECT * FROM region_stats WHERE ward=?", (ward,))
+    rows = query_all("SELECT * FROM region_stats WHERE ward=?", (ward,))
+    if not rows:
+        return jsonify({"error": "not found"}), 404
+    if len(rows) != 1:
+        return jsonify({"error": "同名の地域があります。地域IDを指定してください"}), 409
+    return jsonify(_enrich_region(rows[0]))
+
+
+@app.route("/api/regions/id/<int:rid>")
+def api_region_by_id(rid):
+    row = query_one("SELECT * FROM region_stats WHERE id=?", (rid,))
     if not row:
         return jsonify({"error": "not found"}), 404
     return jsonify(_enrich_region(row))
@@ -321,15 +288,13 @@ def api_my_list():
     listings = query_all("""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
         s.budget_score, s.area_score, s.commute_score, s.floor_score, s.pet_score,
         s.station_score, s.age_score, s.initial_cost_score,
-        r.avg_rent AS region_avg_rent, r.avg_area AS region_avg_area,
-        r.avg_building_age AS region_avg_age,
         st.id AS fav_status_id, st.status AS fav_status
         FROM rental_listings l
         LEFT JOIN listing_scores s ON s.listing_id=l.id
-        LEFT JOIN region_stats r ON l.ward = r.ward
         LEFT JOIN listing_status st ON st.listing_id=l.id
         WHERE l.is_active=1 ORDER BY s.total_score DESC""")
 
+    attach_benchmarks(listings)
     from scrapers.machimusubi import extract_station
     st_keys = {l["id"]: extract_station(l.get("nearest_station")) for l in listings}
     uniq_sts = sorted({k for k in st_keys.values() if k})
@@ -376,7 +341,8 @@ def api_my_list():
 
     compare_rows = [{
         "id": l["id"], "title": l.get("title"), "platform": l.get("platform"),
-        "ward": l.get("ward"), "total_monthly_cost": l.get("total_monthly_cost"),
+        "ward": l.get("ward"), "prefecture": l.get("prefecture"), "city": l.get("city"),
+        "region_id": l.get("region_id"), "total_monthly_cost": l.get("total_monthly_cost"),
         "rent": l.get("rent"), "management_fee": l.get("management_fee"),
         "initial_cost_estimate": l.get("initial_cost_estimate"),
         "area_m2": l.get("area_m2"), "price_per_m2": l.get("price_per_m2"),
@@ -392,6 +358,9 @@ def api_my_list():
         "pet_score": l.get("pet_score"), "station_score": l.get("station_score"),
         "age_score": l.get("age_score"), "initial_cost_score": l.get("initial_cost_score"),
         "region_avg_rent": l.get("region_avg_rent"),
+        "region_comparison_cost": l.get("region_comparison_cost"),
+        "benchmark_source": l.get("benchmark_source"), "benchmark_fetched_at": l.get("benchmark_fetched_at"),
+        "benchmark_note": l.get("benchmark_note"),
         "region_avg_area": l.get("region_avg_area"), "region_avg_age": l.get("region_avg_age"),
         "st_station": l.get("st_station"),
         "st_transport": l.get("st_transport"), "st_safety": l.get("st_safety"),
@@ -424,7 +393,7 @@ def api_my_list():
                 bump(label)
         if l.get("total_monthly_cost") and l["total_monthly_cost"] <= max_cost:
             bump("予算内")
-        if l.get("total_monthly_cost") and l.get("region_avg_rent") and l["total_monthly_cost"] < l["region_avg_rent"]:
+        if l.get("total_monthly_cost") and l.get("region_avg_rent") and l["region_comparison_cost"] < l["region_avg_rent"]:
             bump("コスパ良")
         if l.get("area_m2") and l["area_m2"] >= ideal_area:
             bump("広め")
@@ -455,7 +424,7 @@ def api_my_list():
         "ward": l.get("ward"),
         "total_monthly_cost": l.get("total_monthly_cost"),
         "region_avg_rent": l.get("region_avg_rent"),
-        "deviation_pct": round((l["total_monthly_cost"] - l["region_avg_rent"]) / l["region_avg_rent"] * 100, 1)
+        "deviation_pct": round((l["region_comparison_cost"] - l["region_avg_rent"]) / l["region_avg_rent"] * 100, 1)
                         if l.get("total_monthly_cost") and l.get("region_avg_rent") else None,
     } for l in listings if l.get("total_monthly_cost") and l.get("region_avg_rent")]
 
@@ -463,6 +432,7 @@ def api_my_list():
 
     price_history = query_all("""SELECT l.title, l.id, h.total_monthly_cost, h.checked_at
         FROM listing_price_history h JOIN rental_listings l ON h.listing_id=l.id
+        WHERE h.observation_kind='observed' AND h.total_monthly_cost IS NOT NULL
         ORDER BY l.id, h.checked_at""")
 
     return jsonify({
@@ -520,48 +490,55 @@ def api_status():
             JOIN rental_listings l ON st.listing_id=l.id
             LEFT JOIN listing_scores s ON s.listing_id=l.id
             ORDER BY st.updated_at DESC"""))
-    data = request.json or {}
-    listing_id = data.get("listing_id")
-    if listing_id is None:
-        return jsonify({"error": "listing_id is required"}), 400
-    if not query_one("SELECT id FROM rental_listings WHERE id=?", (listing_id,)):
-        return jsonify({"error": "listing not found"}), 404
-    sid = execute("""INSERT INTO listing_status
-        (listing_id, status, priority, memo, contacted)
-        VALUES (?,?,?,?,?)""",
-        (listing_id, data.get("status"), data.get("priority"),
-         data.get("memo"), data.get("contacted", 0)))
-    return jsonify({"id": sid}), 201
+    data = status_fields(_json_object(), creating=True)
+    from db_helper import transaction
+    with transaction(immediate=True) as conn:
+        if not conn.execute("SELECT id FROM rental_listings WHERE id=?", (data["listing_id"],)).fetchone():
+            return jsonify({"error": "listing not found"}), 404
+        data.setdefault("priority", 1)
+        data.setdefault("contacted", 0)
+        fields = list(data)
+        inserted = conn.execute(f"INSERT INTO listing_status ({','.join(fields)}) "
+            f"VALUES ({','.join('?' for _ in fields)}) ON CONFLICT(listing_id) DO NOTHING RETURNING id",
+            list(data.values())).fetchone()
+        sid = inserted[0] if inserted else conn.execute(
+            "SELECT id FROM listing_status WHERE listing_id=?", (data["listing_id"],)).fetchone()[0]
+    return jsonify({"id": sid}), 201 if inserted else 200
 
 
 @app.route("/api/status/<int:sid>", methods=["PUT", "DELETE"])
 def api_status_modify(sid):
+    if not query_one("SELECT id FROM listing_status WHERE id=?", (sid,)):
+        return jsonify({"error": "not found"}), 404
     if request.method == "DELETE":
         execute("DELETE FROM listing_status WHERE id=?", (sid,))
         return jsonify({"ok": True})
-    data = request.json or {}
-    allowed = ["status", "priority", "memo", "contacted", "viewing_date", "decision"]
-    fields = [k for k in allowed if k in data]
-    if not fields:
-        return jsonify({"ok": True})
-    set_clause = ", ".join(f"{k}=?" for k in fields) + ", updated_at=CURRENT_TIMESTAMP"
-    params = [data[k] for k in fields] + [sid]
-    execute(f"UPDATE listing_status SET {set_clause} WHERE id=?", params)
+    data = status_fields(_json_object())
+    if data:
+        sets = ", ".join(f"{key}=?" for key in data)
+        execute(f"UPDATE listing_status SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                [*data.values(), sid])
     return jsonify({"ok": True})
 
 
 @app.route("/api/compare")
 def api_compare():
     ids = request.args.get("ids", "")
-    id_list = [int(x) for x in ids.split(",") if x]
-    if not id_list:
+    if not ids:
         return jsonify([])
+    parts = ids.split(",")
+    if len(parts) > 4 or any(not x.isascii() or not x.isdigit() or len(x) > 19 for x in parts):
+        raise ValueError("ids: 1〜4件の正の物件IDを指定してください")
+    id_list = list(dict.fromkeys(int(x) for x in parts))
+    if any(x < 1 or x > 2**63 - 1 for x in id_list):
+        raise ValueError("ids: 正の物件IDを指定してください")
     placeholders = ",".join("?" * len(id_list))
     rows = query_all(f"""SELECT l.*, s.total_score, s.score_reason, s.commute_resolved,
         s.budget_score, s.area_score, s.commute_score, s.floor_score, s.pet_score,
         s.station_score, s.age_score, s.initial_cost_score
         FROM rental_listings l LEFT JOIN listing_scores s ON s.listing_id=l.id
-        WHERE l.id IN ({placeholders})""", id_list)
+        WHERE l.is_active=1 AND l.id IN ({placeholders})""", id_list)
+    rows.sort(key=lambda r: id_list.index(r["id"]))
     from scrapers.machimusubi import extract_station
     for r in rows:
         r["station_name"] = extract_station(r.get("nearest_station"))
@@ -586,13 +563,13 @@ def api_import_detail():
     """粘贴单个房源详情页 URL,自动解析入库 + 评分。支持4平台。"""
     from scrapers.base import fetch_html
     from scripts.run_scrape import normalize, upsert_listing
-    from scripts.recalculate_scores import recalculate
-    from db_helper import get_conn
+    from db_helper import transaction
 
-    data = request.json or {}
-    url = data.get("url", "").strip()
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
+    data = _json_object()
+    url = data.get("url")
+    if not isinstance(url, str) or not url.strip() or len(url) > 4096:
+        raise ValueError("URL: 4096文字以内の物件URLを入力してください")
+    url = url.strip()
 
     # 根据 URL 判断平台和解析器(ホスト名を厳密に照合)
     parser = _detail_parser(url)
@@ -610,25 +587,18 @@ def api_import_detail():
     except Exception as e:
         return jsonify({"error": f"解析エラー: {str(e)}"}), 500
 
-    conn = get_conn()
     prefs = query_one("SELECT * FROM user_preferences WHERE id=1")
-    status, listing_id = upsert_listing(conn, normalize(raw, prefs))
-    conn.commit()
-    conn.close()
-
-    _score_single(listing_id)
-
-    # 住民評価は表示だけの付随情報。既定の再試行(6秒+12秒のバックオフ)を
-    # 導入リクエストの中で待たせないよう、ここでは1回だけ試す。
-    try:
-        from scrapers.machimusubi import get_station_review
-        if raw.nearest_station:
-            get_station_review(raw.nearest_station, retries=0)
-    except Exception:
-        pass
+    normalized = normalize(raw, prefs)
+    if not normalized["rent"] or normalized["rent"] < 0:
+        return jsonify({"error": "家賃を解析できませんでした。物件詳細ページを確認してください"}), 422
+    with transaction(immediate=True) as conn:
+        status, listing_id = upsert_listing(conn, normalized)
+    _score_single(listing_id, resolve_commute=False)
+    enrichment = _enqueue_enrichment(listing_id)
 
     return jsonify({
         "status": status,
+        "enrichment_status": enrichment,
         "id": listing_id,
         "title": raw.title,
         "message": f"「{raw.title}」を{'追加' if status == 'inserted' else '更新'}しました"
@@ -640,8 +610,7 @@ def api_listing_refresh(lid):
     """重新抓取某房源(更新价格,写历史),重算评分。"""
     from scrapers.base import fetch_html
     from scripts.run_scrape import normalize, upsert_listing
-    from scripts.recalculate_scores import recalculate
-    from db_helper import get_conn
+    from db_helper import transaction
 
     listing = query_one("SELECT * FROM rental_listings WHERE id=?", (lid,))
     if not listing:
@@ -664,13 +633,15 @@ def api_listing_refresh(lid):
     except Exception as e:
         return jsonify({"error": f"解析エラー: {str(e)}"}), 500
 
-    conn = get_conn()
+    raw.detail_url = url
     prefs = query_one("SELECT * FROM user_preferences WHERE id=1")
-    status, _ = upsert_listing(conn, normalize(raw, prefs))
-    conn.commit()
-    conn.close()
-
-    _score_single(lid)
+    normalized = normalize(raw, prefs)
+    if not raw.title or not normalized["rent"] or normalized["rent"] < 0:
+        return jsonify({"error": "物件情報を解析できませんでした。保存済みデータは変更していません"}), 422
+    with transaction(immediate=True) as conn:
+        upsert_listing(conn, normalized)
+    _score_single(lid, resolve_commute=False)
+    enrichment = _enqueue_enrichment(lid)
 
     new_listing = query_one("SELECT total_monthly_cost FROM rental_listings WHERE id=?", (lid,))
     new_cost = new_listing["total_monthly_cost"] if new_listing else None
@@ -682,6 +653,7 @@ def api_listing_refresh(lid):
         "old_cost": old_cost,
         "new_cost": new_cost,
         "price_changed": price_changed,
+        "enrichment_status": enrichment,
         "message": f"「{raw.title}」を更新しました" + (f" 価格変動: {old_cost}→{new_cost}円" if price_changed else " 価格変動なし"),
     })
 
@@ -693,29 +665,35 @@ def api_preferences():
 
 @app.route("/api/preferences", methods=["PUT"])
 def api_preferences_update():
-    data = request.json
-    fields = ["max_total_monthly_cost", "min_area_m2", "ideal_area_m2", "min_floor",
-              "require_pet_allowed", "max_walk_minutes", "ideal_walk_minutes",
-              "max_building_age", "target_station", "budget_weight", "area_weight",
-              "commute_weight", "floor_weight", "pet_weight", "station_weight",
-              "age_weight", "initial_cost_weight", "broker_fee_rate",
-              "prepaid_rent_months", "misc_cost"]
-    present = [f for f in fields if f in data]
-    if present:
-        sets = ", ".join(f"{f}=?" for f in present)
-        params = [data[f] for f in present] + ["1"]
-        execute(f"UPDATE user_preferences SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=?", params)
-
-    if any(f in data for f in ("broker_fee_rate", "prepaid_rent_months", "misc_cost")):
-        _refresh_initial_costs()
+    data = _json_object()
+    from db_helper import transaction
+    from services.scoring import recalculate
+    with transaction(immediate=True) as conn:
+        pref = dict(conn.execute("SELECT * FROM user_preferences WHERE id=1").fetchone())
+        clean = validate_preferences(data, pref)
+        if clean:
+            sets = ", ".join(f"{key}=?" for key in clean)
+            conn.execute(f"UPDATE user_preferences SET {sets}, updated_at=CURRENT_TIMESTAMP WHERE id=1",
+                         list(clean.values()))
+    if clean:
+        recalculate(resolve_commute=False)
     return jsonify({"ok": True})
 
 
 @app.route("/api/scores/recalculate", methods=["POST"])
 def api_recalculate():
-    from scripts.recalculate_scores import recalculate
-    recalculate()
-    return jsonify({"ok": True})
+    from services.scoring import recalculate
+    count = recalculate(resolve_commute=False)
+    states = [_enqueue_enrichment(r["id"]) for r in query_all("SELECT id FROM rental_listings WHERE is_active=1")]
+    return jsonify({"ok": True, "count": count, "pending": states.count("pending"), "deferred": states.count("deferred")})
+
+
+@app.route("/api/listings/<int:lid>/enrichment")
+def api_enrichment_status(lid):
+    if not query_one("SELECT id FROM rental_listings WHERE id=?", (lid,)):
+        return jsonify({"error": "not found"}), 404
+    from services.enrichment import status
+    return jsonify({"status": status(lid)})
 
 
 if __name__ == "__main__":

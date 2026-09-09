@@ -88,7 +88,6 @@ CREATE TABLE IF NOT EXISTS listing_price_history (
     management_fee INTEGER,
     total_monthly_cost INTEGER,
     checked_at TEXT,
-    observation_kind TEXT NOT NULL DEFAULT 'observed',
     FOREIGN KEY (listing_id) REFERENCES rental_listings(id)
 );
 
@@ -158,46 +157,7 @@ CREATE TABLE IF NOT EXISTS region_stats (
     safety_level TEXT,
     convenience_level TEXT,
     environment_level TEXT,
-    trade_price_per_m2 INTEGER,
-    trade_count INTEGER,
-    flood_rank INTEGER,
-    sediment_count INTEGER,
-    hazard_level TEXT,
-    rent_layout TEXT,
-    rent_source TEXT NOT NULL DEFAULT 'unverified',
-    rent_fetched_at TEXT,
-    stats_method TEXT NOT NULL DEFAULT 'unverified',
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS region_rent_benchmarks (
-    region_id INTEGER NOT NULL REFERENCES region_stats(id) ON DELETE CASCADE,
-    layout TEXT NOT NULL,
-    rent INTEGER NOT NULL CHECK (rent > 0),
-    includes_management_fee INTEGER CHECK (includes_management_fee IN (0, 1)),
-    source_url TEXT NOT NULL,
-    fetched_at TEXT NOT NULL,
-    PRIMARY KEY (region_id, layout)
-);
-
-CREATE TABLE IF NOT EXISTS commute_cache (
-    origin TEXT NOT NULL,
-    destination TEXT NOT NULL,
-    minutes REAL,
-    expires_at REAL NOT NULL,
-    PRIMARY KEY (origin, destination)
-);
-
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version INTEGER PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS migration_archive (
-    id INTEGER PRIMARY KEY,
-    table_name TEXT NOT NULL,
-    row_data TEXT NOT NULL,
-    archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 駅別 住民評価 (Phase C: LIFULL HOME'S まちむすび アンケート集計値, スコア対象外)
@@ -233,4 +193,3 @@ CREATE INDEX IF NOT EXISTS idx_listings_platform ON rental_listings(platform);
 CREATE INDEX IF NOT EXISTS idx_listings_ward ON rental_listings(ward);
 CREATE INDEX IF NOT EXISTS idx_scores_total ON listing_scores(total_score);
 CREATE INDEX IF NOT EXISTS idx_region_ward ON region_stats(ward);
-CREATE INDEX IF NOT EXISTS idx_history_listing_time ON listing_price_history(listing_id, checked_at);

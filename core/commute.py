@@ -1,4 +1,5 @@
 import requests
+import math
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,6 +24,9 @@ def get_commute_minutes(from_station, to_station):
         items = data.get("items", [])
         if not items:
             return None
-        return items[0].get("summary", {}).get("moveTime")
+        minutes = items[0].get("summary", {}).get("moveTime")
+        if isinstance(minutes, bool) or not isinstance(minutes, (int, float)):
+            return None
+        return minutes if math.isfinite(minutes) and 0 <= minutes <= 1440 else None
     except (requests.RequestException, KeyError, ValueError):
         return None

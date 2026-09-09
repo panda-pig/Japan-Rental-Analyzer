@@ -42,7 +42,7 @@ class ScoreResult:
     pet_score: int
     station_score: int
     age_score: int
-    initial_cost_score: int
+    initial_cost_score: int | None
     feature_score: int
     total_score: int
     score_reason: str
@@ -76,7 +76,7 @@ def _area_score(area, ideal, minimum=35):
 def _floor_score(floor, min_floor):
     if floor is None:
         return 3
-    return 10 if floor >= (min_floor or 2) else 0
+    return 10 if floor >= (min_floor if min_floor is not None else 2) else 0
 
 
 def _pet_score(pet):
@@ -120,6 +120,8 @@ def _age_score(age, max_age):
 
 
 def _initial_cost_score(deposit, key_money, rent):
+    if deposit is None or key_money is None or not rent:
+        return None
     d = deposit or 0
     k = key_money or 0
     if d == 0 and k == 0:
@@ -167,8 +169,9 @@ def calculate_scores(inp: ScoreInput, w: Weights, max_cost, ideal_area,
     parts = [
         ("budget", bs, w.budget), ("area", as_, w.area), ("floor", fs, w.floor),
         ("pet", ps, w.pet), ("station", ss, w.station), ("age", ags, w.age),
-        ("initial_cost", ics, w.initial_cost),
     ]
+    if ics is not None:
+        parts.append(("initial_cost", ics, w.initial_cost))
     if commute_resolved:
         parts.append(("commute", cs_val, w.commute))
 
@@ -185,16 +188,18 @@ def calculate_scores(inp: ScoreInput, w: Weights, max_cost, ideal_area,
         reasons.append(f"月額{max_cost // 10000}万円以内")
     if inp.area_m2 and inp.area_m2 >= ideal_area:
         reasons.append(f"{ideal_area}㎡以上")
-    if inp.floor and inp.floor >= 2:
-        reasons.append("2階以上")
-    if inp.walk_minutes and inp.walk_minutes <= 10:
-        reasons.append("駅徒歩10分以内")
+    if inp.floor is not None and inp.floor >= min_floor:
+        reasons.append(f"{min_floor}階以上")
+    if inp.walk_minutes is not None and inp.walk_minutes <= max_walk:
+        reasons.append(f"駅徒歩{max_walk}分以内")
     if inp.pet_allowed == 1:
         reasons.append("ペット可/相談可")
     if commute_resolved and cs_val >= 12:
         reasons.append(f"通勤{commute_minutes}分以内")
     if not commute_resolved:
         reasons.append("※通勤分未計算")
+    if ics is None:
+        reasons.append("※敷金・礼金未取得：初期費用は評価対象外")
     score_reason = " / ".join(reasons)
 
     return ScoreResult(

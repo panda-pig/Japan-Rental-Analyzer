@@ -2,6 +2,7 @@
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
 function safeUrl(u) {
+  if (typeof u !== 'string' || !u.trim()) return '';
   try {
     const p = new URL(u, location.origin);
     return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
@@ -31,7 +32,7 @@ function summary(data) {
 }
 
 async function load() {
-  const data = await (await fetch("/api/status")).json();
+  const data = await Rental.requestJSON("/api/status");
   const el = document.getElementById("fav-list");
   document.getElementById("fav-summary").innerHTML = "";
   if (!data.length) {
@@ -50,18 +51,18 @@ async function load() {
         <h3 style="margin:0;">${esc(s.title || "(名称不明)")}</h3>
         ${s.total_score != null ? `<span class="badge score${s.total_score >= 75 ? '' : s.total_score >= 60 ? ' mid' : ' low'}">${s.total_score}</span>` : ""}
       </div>
-      <p class="location">${esc(s.ward || "エリア不明")} ・ ${(s.total_monthly_cost || 0).toLocaleString()}円${s.area_m2 ? ` ・ ${s.area_m2}㎡` : ""}${s.layout ? ` ・ ${esc(s.layout)}` : ""}</p>
-      <div class="tags"><span class="tag ${cls}">${s.status || "未設定"}</span></div>
+      <p class="location">${esc(s.ward || "エリア不明")} ・ ${Rental.money(s.total_monthly_cost)}${s.area_m2 ? ` ・ ${s.area_m2}㎡` : ""}${s.layout ? ` ・ ${esc(s.layout)}` : ""}</p>
+      <div class="tags"><span class="tag ${cls}">${esc(s.status || "未設定")}</span></div>
       <label style="font-size:11px;color:var(--text-muted);">ステータス</label>
       <select onchange="updateField(${s.id}, 'status', this.value)" style="width:100%;">
         ${STATUSES.map(st => `<option ${st === s.status ? "selected" : ""}>${st}</option>`).join("")}
       </select>
       <div style="display:${showDate ? "block" : "none"};">
         <label style="font-size:11px;color:var(--text-muted);">内見予定日</label>
-        <input type="date" value="${s.viewing_date || ""}" onchange="updateField(${s.id}, 'viewing_date', this.value)" style="width:100%;">
+        <input type="date" value="${esc(s.viewing_date || "")}" onchange="updateField(${s.id}, 'viewing_date', this.value)" style="width:100%;">
       </div>
       <label style="font-size:11px;color:var(--text-muted);">メモ</label>
-      <input type="text" placeholder="駅近い / 要確認 など" value="${(s.memo || "").replace(/"/g, "&quot;")}" onblur="updateField(${s.id}, 'memo', this.value)" style="width:100%;">
+      <input type="text" placeholder="駅近い / 要確認 など" value="${esc(s.memo || "")}" onblur="updateField(${s.id}, 'memo', this.value)" style="width:100%;">
       <div class="actions">
         <button class="btn btn-ghost btn-sm" onclick="removeFav(${s.id})">削除</button>
         ${safeUrl(s.detail_url) ? `<a class="btn btn-primary btn-sm" href="${esc(safeUrl(s.detail_url))}" target="_blank" rel="noopener">原平台で見る</a>` : ""}
@@ -70,18 +71,35 @@ async function load() {
   }).join("");
 }
 
+function saveMessage(message, ok = true) {
+  let el = document.getElementById('fav-save-msg');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'fav-save-msg';
+    el.setAttribute('role', 'status');
+    document.getElementById('fav-list').before(el);
+  }
+  el.style.color = ok ? 'var(--good)' : 'var(--bad)';
+  el.textContent = message;
+}
+
 async function updateField(id, field, value) {
-  await fetch(`/api/status/${id}`, {
-    method: "PUT", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ [field]: value }),
-  });
-  if (field === "status") load();
+  try {
+    await Rental.requestJSON(`/api/status/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    saveMessage('保存しました');
+    if (field === "status") await load();
+  } catch (error) { saveMessage(error.message, false); }
 }
 
 async function removeFav(id) {
   if (!confirm("この物件をお気に入りから削除しますか?")) return;
-  await fetch(`/api/status/${id}`, { method: "DELETE" });
-  load();
+  try {
+    await Rental.requestJSON(`/api/status/${id}`, { method: "DELETE" });
+    await load();
+  } catch (error) { saveMessage(error.message, false); }
 }
 
-load();
+load().catch(error => Rental.showError('fav-list', error));

@@ -91,8 +91,8 @@ function bar(id, data) {
 
 function valueMap() {
   const el = document.getElementById('chart-value-map'); if (!el) return;
-  const rented = regionData.filter(r => r.avg_rent);
-  if (!rented.length) { chartEmpty(el); return; }
+  const rented = regionData.filter(r => r.avg_rent && r.rent_layout === '1LDK' && r.rent_fetched_at);
+  if (!rented.length) { chartEmpty(el, '間取り・取得日を確認できる相場データはまだありません。既存の参考値は全エリア一覧で確認できます。'); return; }
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
   const best = [...rented].sort((a, b) => (b.overall_score / b.avg_rent) - (a.overall_score / a.avg_rent)).slice(0, 3);
@@ -188,6 +188,7 @@ function renderTable() {
   tbody.innerHTML = rows.map(r => `<tr>
     <td style="font-weight:600;color:var(--text-primary);">${regionName(r)}</td>
     <td>${r.avg_rent ? man(r.avg_rent) : '-'}</td>
+    <td>${Rental.esc(r.rent_layout || '間取り未確認')}<br>${r.rent_source === 'manual_estimate' ? '手動概算' : /^https:\/\/suumo\.jp\//.test(r.rent_source || '') ? `<a href="${Rental.esc(r.rent_source)}" target="_blank" rel="noopener">SUUMO</a>` : '出典・時点未確認'}<br>${Rental.esc((r.rent_fetched_at || '').slice(0, 10))}</td>
     <td title="${r.trade_count ? `直近4四半期 ${r.trade_count}件 (中古マンション等, 出典: 不動産情報ライブラリ)` : ''}">${r.trade_price_per_m2 ? man(r.trade_price_per_m2) : '-'}</td>
     <td>${scoreBar(r.overall_score)}</td>
     <td>${levelTag(r.safety_level)}</td>
@@ -227,7 +228,7 @@ function renderCharts() {
 }
 
 async function load() {
-  const d = await (await fetch('/api/dashboard')).json();
+  const d = await Rental.requestJSON('/api/dashboard');
   dashData = d;
   regionData = d.regions || [];
   scoreByWard = {};
@@ -279,4 +280,4 @@ window.addEventListener('resize', () => {
     Object.values(chartRegistry).forEach(c => { if (!c.isDisposed()) c.resize(); });
   }, 200);
 });
-load();
+load().catch(error => Rental.showError('metrics', error));

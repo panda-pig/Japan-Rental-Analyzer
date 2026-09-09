@@ -90,16 +90,16 @@
 | 层 | 选型 |
 |---|---|
 | 后端 | Python 3.14 / Flask |
-| 数据库 | SQLite，11 张表 |
+| 数据库 | SQLite，版本化数据库迁移 |
 | 抓取 | requests / BeautifulSoup4，遵守 robots.txt，请求间礼貌休眠 |
 | 公开数据 | 不动产信息库 API + XYZ 瓦片坐标计算 |
 | 站名匹配 | pykakasi（汉字→罗马字）+ 归一化 + 近似匹配 |
 | 通勤计算 | NAVITIME Transfer API（可选） |
 | 前端 | Jinja2 / 原生 JS / ECharts 5 / wordcloud2.js |
-| 测试 | pytest，107 个测试 |
+| 测试 | pytest + Node.js 回归测试 |
 
 抓取目标按解析出的主机名与白名单严格比对，拒绝私有地址，并对每一跳重定向重新
-校验。抓来的文本进入 DOM 前一律转义。设置了 `ADMIN_TOKEN` 的环境中，破坏性操作
+校验。抓来的文本进入 DOM 前一律转义。设置了 `ADMIN_TOKEN` 的环境中，写操作
 与配置变更需要该令牌。
 
 界面以 WCAG 2.1 AA 为目标：表格可用键盘操作、每张图表都有文字替代、表单结果有
@@ -115,7 +115,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 #   REINFOLIB_API_KEY   : 不动产信息库（可选）
 #   NAVITIME_CLIENT_KEY : 通勤时间（没有则自动跳过通勤维度）
-#   ADMIN_TOKEN         : 设置后破坏性接口需要该令牌
+#   ADMIN_TOKEN         : 设置后所有写接口需要该令牌
 
 python scripts/init_db.py
 python scripts/seed_regions.py
@@ -130,14 +130,14 @@ python app.py    # http://127.0.0.1:5000
 
 批量抓取走命令行，没有对应的 HTTP 接口：
 `python scripts/run_scrape.py` 读取 `source_configs` 表中的配置执行。
-设置了 `ADMIN_TOKEN` 时，页面会在第一次破坏性操作时询问一次令牌，
+设置了 `ADMIN_TOKEN` 时，页面会在第一次写操作时询问一次令牌，
 并记在浏览器里。
 
 ## 部署到 Render
 
 1. New → Web Service → 关联本仓库
 2. Build `pip install -r requirements.txt`，
-   Start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1`
+   Start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4`
 3. Persistent Disk 1GB，挂载路径 `db`
 4. 环境变量 `DB_PATH=/opt/render/project/src/db/database.db`、
    `REINFOLIB_API_KEY`、`ADMIN_TOKEN`
@@ -152,3 +152,6 @@ python app.py    # http://127.0.0.1:5000
 - 居民评价只保存汇总数值，不保存评论正文与个人信息
 - 公开数据与居民评价在界面上标明出处，且不计入房源评分
 - 仅用于个人学习与决策辅助，不对数据做商业再分发
+
+
+[可靠性更新与升级说明](UPGRADE.md)

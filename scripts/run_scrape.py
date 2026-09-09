@@ -34,7 +34,7 @@ def normalize(raw: RawListing, prefs=None):
     """
     rent = parse_money(raw.rent_raw)
     mgmt = parse_money(raw.management_fee_raw) if raw.management_fee_raw else None
-    total = (rent or 0) + (mgmt or 0) if rent else None
+    total = rent + mgmt if rent is not None and mgmt is not None else None
     deposit = parse_deposit_key_money(raw.deposit_raw, rent)
     key_money = parse_deposit_key_money(raw.key_money_raw, rent)
     area = parse_area(raw.area_raw)
@@ -88,52 +88,44 @@ def normalize(raw: RawListing, prefs=None):
 
 
 def upsert_listing(conn, data):
-    """detail_url 存在则更新,否则插入。返回 ('inserted'|'updated', id)"""
-    cur = conn.execute("SELECT id, rent, total_monthly_cost FROM rental_listings WHERE detail_url=?",
-                       (data["detail_url"],))
-    row = cur.fetchone()
+    """Atomically refresh all parsed fields and record observed price changes."""
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    cur = conn.execute("SELECT * FROM rental_listings WHERE detail_url=?", (data["detail_url"],))
+    values = cur.fetchone()
+    old = dict(zip([c[0] for c in cur.description], values)) if values else None
     now = datetime.now().isoformat()
-    if row:
-        listing_id, old_rent, old_total = row
-        conn.execute("""UPDATE rental_listings SET rent=?, management_fee=?, total_monthly_cost=?,
-            deposit=?, key_money=?, initial_cost_estimate=?, area_m2=?, price_per_m2=?,
-            floor=?, building_age=?, walk_minutes=?, last_seen_at=?, updated_at=?
-            WHERE id=?""",
-            (data["rent"], data["management_fee"], data["total_monthly_cost"],
-             data["deposit"], data["key_money"], data["initial_cost_estimate"],
-             data["area_m2"], data["price_per_m2"], data["floor"], data["building_age"],
-             data["walk_minutes"], now, now, listing_id))
-        if old_total != data["total_monthly_cost"]:
+    if old:
+        listing_id = old["id"]
+        # A legacy listing may not yet have a trustworthy initial observation.
+        observed = conn.execute("SELECT 1 FROM listing_price_history WHERE listing_id=? "
+                                "AND observation_kind='observed' LIMIT 1", (listing_id,)).fetchone()
+        if not observed and old.get("last_seen_at"):
             conn.execute("""INSERT INTO listing_price_history
-                (listing_id, rent, management_fee, total_monthly_cost, checked_at)
-                VALUES (?,?,?,?,?)""",
-                (listing_id, old_rent, None, old_total, now))
-        return ("updated", listing_id)
-    cur = conn.execute("SELECT listing_hash FROM rental_listings WHERE listing_hash=?",
-                       (data["listing_hash"],))
-    dup_group = None
-    if cur.fetchone():
-        dup_group = data["listing_hash"][:8]
-    cur = conn.execute("""INSERT INTO rental_listings
-        (platform, detail_url, title, rent, management_fee, total_monthly_cost,
-         deposit, key_money, initial_cost_estimate, layout, area_m2, price_per_m2,
-         floor, total_floors, building_age, walk_minutes, nearest_station,
-         address, prefecture, city, ward, pet_allowed,
-         bath_toilet_separate, auto_lock, delivery_box, south_facing, aircon,
-         two_person_allowed, image_url, listing_hash, duplicate_group_id,
-         first_seen_at, last_seen_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (data["platform"], data["detail_url"], data["title"], data["rent"],
-         data["management_fee"], data["total_monthly_cost"], data["deposit"],
-         data["key_money"], data["initial_cost_estimate"], data["layout"],
-         data["area_m2"], data["price_per_m2"], data["floor"], data["total_floors"],
-         data["building_age"], data["walk_minutes"], data["nearest_station"],
-         data["address"], data["prefecture"], data["city"], data["ward"],
-         data["pet_allowed"], data["bath_toilet_separate"], data["auto_lock"],
-         data["delivery_box"], data["south_facing"], data["aircon"],
-         data["two_person_allowed"], data["image_url"], data["listing_hash"],
-         dup_group, now, now))
-    return ("inserted", cur.lastrowid)
+                (listing_id,rent,management_fee,total_monthly_cost,checked_at,observation_kind)
+                VALUES (?,?,?,?,?,'observed')""",
+                (listing_id, old["rent"], old["management_fee"], old["total_monthly_cost"], old["last_seen_at"]))
+        columns = [key for key in data if key != "detail_url"]
+        sets = ", ".join(f"{key}=?" for key in columns)
+        conn.execute(f"UPDATE rental_listings SET {sets}, is_active=1, last_seen_at=?, updated_at=? WHERE id=?",
+                     [data[key] for key in columns] + [now, now, listing_id])
+        status = "updated"
+    else:
+        duplicate = conn.execute("SELECT 1 FROM rental_listings WHERE listing_hash=?", (data["listing_hash"],)).fetchone()
+        columns = list(data) + ["duplicate_group_id", "first_seen_at", "last_seen_at"]
+        params = list(data.values()) + [data["listing_hash"][:8] if duplicate else None, now, now]
+        cur = conn.execute(f"INSERT INTO rental_listings ({','.join(columns)}) "
+                           f"VALUES ({','.join('?' for _ in columns)})", params)
+        listing_id, status = cur.lastrowid, "inserted"
+    previous = conn.execute("SELECT rent,management_fee,total_monthly_cost FROM listing_price_history "
+                            "WHERE listing_id=? AND observation_kind='observed' ORDER BY id DESC LIMIT 1",
+                            (listing_id,)).fetchone()
+    price = (data["rent"], data["management_fee"], data["total_monthly_cost"])
+    if previous is None or tuple(previous) != price:
+        conn.execute("""INSERT INTO listing_price_history
+            (listing_id,rent,management_fee,total_monthly_cost,checked_at,observation_kind)
+            VALUES (?,?,?,?,?,'observed')""", (listing_id, *price, now))
+    return status, listing_id
 
 
 def run_scrape(source_ids=None):
