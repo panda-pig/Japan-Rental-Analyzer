@@ -1,24 +1,28 @@
-<html><body>
+<!doctype html>
+<!-- Synthetic listings using the parser's building/room structure. -->
+<html lang="ja"><body>
 <div class="cassetteitem">
-  <a href="/jj/chintai/BC_00012345/" class="ui-cassette-title">テストマンション横浜</a>
-  <div class="cassetteitem_price">12.8万円</div>
-  <div class="cassetteitem_price--others">管理費 8,000円</div>
-  <div class="cassetteitem_detail">1LDK</div>
-  <div class="cassetteitem_madori">42.3m²</div>
-  <div class="cassetteitem_kion">3階</div>
-  <div class="cassetteitem_kasu">築12年</div>
-  <div class="cassetteitem_kotsu">東神奈川駅 徒歩8分</div>
-  <div class="cassetteitem_address">横浜市神奈川区栄町10-1</div>
+  <div class="cassetteitem_content-title">サンプル物件 A</div>
+  <div class="cassetteitem_detail-col1">神奈川県横浜市神奈川区サンプル町1-1</div>
+  <div class="cassetteitem_detail-text">東神奈川駅 徒歩8分</div>
+  <div class="cassetteitem_detail-col3">築12年 / 5階建</div>
+  <table><tbody>
+    <tr>
+      <td></td><td></td><td>3階</td>
+      <td><span class="cassetteitem_price--rent">12.8万円</span><span class="cassetteitem_price--administration">8000円</span></td>
+      <td><span class="cassetteitem_price--deposit">0.5ヶ月</span><span class="cassetteitem_price--gratuity">-</span></td>
+      <td><span class="cassetteitem_madori">1LDK</span><span class="cassetteitem_menseki">42.3m²</span></td>
+      <td><a href="/chintai/jnc_sample001/">詳細</a></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td>4階</td>
+      <td><span class="cassetteitem_price--rent">13.2万円</span><span class="cassetteitem_price--administration">8000円</span></td>
+      <td><span class="cassetteitem_price--deposit">1ヶ月</span><span class="cassetteitem_price--gratuity">なし</span></td>
+      <td><span class="cassetteitem_madori">1LDK</span><span class="cassetteitem_menseki">42.3m²</span></td>
+      <td><a href="https://suumo.jp/chintai/jnc_sample002/">詳細</a></td>
+    </tr>
+    <tr><td>Incomplete room without a detail link</td></tr>
+  </tbody></table>
 </div>
-<div class="cassetteitem">
-  <a href="/jj/chintai/BC_00012346/" class="ui-cassette-title">テストマンション蒲田</a>
-  <div class="cassetteitem_price">8.5万円</div>
-  <div class="cassetteitem_price--others">管理費 5,000円</div>
-  <div class="cassetteitem_detail">1K</div>
-  <div class="cassetteitem_madori">25.0m²</div>
-  <div class="cassetteitem_kion">2階</div>
-  <div class="cassetteitem_kasu">築18年</div>
-  <div class="cassetteitem_kotsu">蒲田駅 徒歩12分</div>
-  <div class="cassetteitem_address">東京都大田区蒲田5-20-3</div>
-</div>
+<div class="cassetteitem"><p>Incomplete building without a title</p></div>
 </body></html>

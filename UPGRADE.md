@@ -39,3 +39,5 @@ node --test tests/frontend.test.cjs
 ```
 
 The GitHub Actions workflow runs both suites. No database or API keys are needed.
+Portable parser tests use synthetic committed fixtures. Four additional tests
+use optional local `*_real.html` snapshots and skip when those files are absent.
