@@ -382,6 +382,9 @@ def api_my_list():
         ("two_person_allowed", "2人入居可"),
     ]
     ideal_area = pref["ideal_area_m2"] if pref else 40
+    min_floor = pref["min_floor"] if pref else 2
+    max_walk = pref["max_walk_minutes"] if pref else 15
+    max_age = pref["max_building_age"] if pref else 20
     cloud = {}
 
     def bump(label):
@@ -397,12 +400,12 @@ def api_my_list():
             bump("コスパ良")
         if l.get("area_m2") and l["area_m2"] >= ideal_area:
             bump("広め")
-        if l.get("building_age") is not None and l["building_age"] <= 10:
-            bump("築浅")
-        if l.get("walk_minutes") is not None and l["walk_minutes"] <= 10:
-            bump("駅徒歩10分以内")
-        if l.get("floor") is not None and l["floor"] >= 3:
-            bump("3階以上")
+        if l.get("building_age") is not None and l["building_age"] <= max_age:
+            bump(f"築{max_age}年以内")
+        if l.get("walk_minutes") is not None and l["walk_minutes"] <= max_walk:
+            bump(f"駅徒歩{max_walk}分以内")
+        if l.get("floor") is not None and l["floor"] >= min_floor:
+            bump(f"{min_floor}階以上")
         if l.get("key_money") == 0:
             bump("礼金なし")
         if l.get("deposit") == 0:
@@ -430,10 +433,7 @@ def api_my_list():
 
     status_progress = query_all("""SELECT status, COUNT(*) AS value FROM listing_status GROUP BY status""")
 
-    price_history = query_all("""SELECT l.title, l.id, h.total_monthly_cost, h.checked_at
-        FROM listing_price_history h JOIN rental_listings l ON h.listing_id=l.id
-        WHERE h.observation_kind='observed' AND h.total_monthly_cost IS NOT NULL
-        ORDER BY l.id, h.checked_at""")
+    from services.enrichment import status as enrichment_status
 
     return jsonify({
         "total": total, "budget_match": budget_match,
@@ -445,7 +445,7 @@ def api_my_list():
         "compare_rows": compare_rows,
         "deviations": deviations,
         "status_progress": status_progress,
-        "price_history": price_history,
+        "pending_enrichment_ids": [l["id"] for l in listings if enrichment_status(l["id"]) == "pending"],
         "feature_cloud": feature_cloud,
         "layout_dist": layout_dist,
         "prefs": {
@@ -454,6 +454,9 @@ def api_my_list():
             "misc_cost": pref["misc_cost"] if pref else 40000,
             "max_total_monthly_cost": max_cost,
             "ideal_area_m2": pref["ideal_area_m2"] if pref else 40,
+            "min_floor": min_floor,
+            "max_walk_minutes": max_walk,
+            "max_building_age": max_age,
         },
     })
 
@@ -479,6 +482,16 @@ def api_listing_detail(lid):
     if not row:
         return jsonify({"error": "not found"}), 404
     return jsonify(row)
+
+
+@app.route("/api/listings/<int:lid>/price-history")
+def api_listing_price_history(lid):
+    if not query_one("SELECT id FROM rental_listings WHERE id=? AND is_active=1", (lid,)):
+        return jsonify({"error": "not found"}), 404
+    history = query_all("""SELECT total_monthly_cost, checked_at FROM listing_price_history
+        WHERE listing_id=? AND observation_kind='observed' AND total_monthly_cost IS NOT NULL
+        ORDER BY checked_at, id""", (lid,))
+    return jsonify({"listing_id": lid, "history": history})
 
 
 @app.route("/api/status", methods=["GET", "POST"])
@@ -677,7 +690,10 @@ def api_preferences_update():
                          list(clean.values()))
     if clean:
         recalculate(resolve_commute=False)
-    return jsonify({"ok": True})
+    states = []
+    if clean.get("target_station") and clean["target_station"] != pref["target_station"]:
+        states = [_enqueue_enrichment(r["id"]) for r in query_all("SELECT id FROM rental_listings WHERE is_active=1")]
+    return jsonify({"ok": True, "pending": states.count("pending"), "deferred": states.count("deferred")})
 
 
 @app.route("/api/scores/recalculate", methods=["POST"])

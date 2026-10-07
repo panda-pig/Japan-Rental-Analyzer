@@ -11,7 +11,7 @@ from scrapers.homes import parse_homes
 from scrapers.athome import parse_athome
 from scrapers.models import RawListing
 from core.cleaning import (
-    parse_money, parse_deposit_key_money, parse_area, parse_walk_minutes,
+    parse_money, parse_deposit_key_money, parse_area, parse_walk_minutes, parse_station_walk,
     parse_floor, parse_building_age, parse_pet_allowed, parse_features,
 )
 from core.address import parse_address
@@ -40,7 +40,8 @@ def normalize(raw: RawListing, prefs=None):
     area = parse_area(raw.area_raw)
     floor, total_floors = parse_floor(raw.floor_raw)
     age = parse_building_age(raw.age_raw)
-    walk = parse_walk_minutes(raw.walk_raw)
+    access = parse_station_walk(raw.walk_raw) or parse_station_walk(raw.nearest_station)
+    walk = access[1] if access else parse_walk_minutes(raw.walk_raw)
     addr = parse_address(raw.address_raw)
     feats = parse_features(raw.features_raw)
     if prefs:
@@ -70,7 +71,7 @@ def normalize(raw: RawListing, prefs=None):
         "total_floors": total_floors,
         "building_age": age,
         "walk_minutes": walk,
-        "nearest_station": raw.nearest_station,
+        "nearest_station": access[0] if access else raw.nearest_station,
         "address": raw.address_raw,
         "prefecture": addr["prefecture"],
         "city": addr["city"],

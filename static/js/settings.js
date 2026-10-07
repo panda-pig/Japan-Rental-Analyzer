@@ -61,12 +61,13 @@ async function save(recalculate = false) {
   saving = true;
   try {
     toast('保存中…');
-    await persist();
+    const saved = await persist();
     if (recalculate) {
       const result = await Rental.requestJSON('/api/scores/recalculate', { method: 'POST' });
       toast(result.deferred ? `スコアを更新しました。追加取得の待機枠が満杯です。残り${result.deferred}件は後で再試行してください。` :
         result.pending ? 'スコアを更新しました。通勤・住民評価は追加取得中です。' : 'スコアを更新しました');
-    } else toast('保存してスコアを更新しました');
+    } else toast(saved.deferred ? `保存してスコアを更新しました。通勤の追加取得は残り${saved.deferred}件を後で再試行してください。` :
+      saved.pending ? '保存してスコアを更新しました。新しい目的駅への通勤時間を取得中です。' : '保存してスコアを更新しました');
   } catch (error) { toast(error.message, false); }
   finally { saving = false; }
 }

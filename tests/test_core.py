@@ -75,7 +75,7 @@ def test_parse_pet_allowed():
     assert parse_pet_allowed("小型犬可") == 1
     assert parse_pet_allowed("猫可") == 1
     assert parse_pet_allowed("ペット不可") == 0
-    assert parse_pet_allowed(None) == 0
+    assert parse_pet_allowed(None) is None
 
 def test_parse_features():
     feats = parse_features(["バストイレ別", "オートロック", "宅配ボックス"])

@@ -30,6 +30,32 @@ refresh action to retry. Keep `--workers 1 --threads 4` as in `Procfile`.
 `gunicorn.conf.py` applies these defaults to Render services whose saved start
 command does not include thread and timeout options.
 Saving preferences recalculates scores using cached commute results immediately.
+Changing the destination also queues a new commute lookup. Requests arriving
+during a pending job are coalesced into another pass; an old origin/destination
+lookup cannot overwrite the score for the new route. The analysis page resumes
+checking pending jobs when reopened.
+
+## Parser and report corrections
+
+- Detail parsers retain missing deposits and key money as unknown, including
+  unsupported values and dashes. SUUMO accepts decimal month amounts and
+  full-width characters. Explicit zero amounts remain zero.
+- Pet permission has three states: allowed, prohibited and unknown. Unrelated
+  restrictions such as musical instruments being prohibited do not cancel pet
+  permission. Unknown uses the existing partial pet score and is labelled in
+  the report.
+- Station names and walking minutes are selected together. Bus travel and the
+  walk from a bus stop do not count as walking time to a station.
+- Report achievement labels and the feature cloud follow saved floor, walking
+  and building-age limits.
+- `/api/my-list` no longer includes `price_history`. The report requests
+  `/api/listings/<id>/price-history`, returning `{listing_id, history}` for the
+  selected listing only. Switching reports reuses that history until the pool
+  is refreshed; late responses cannot update a different listing's chart.
+
+No schema migration is required for these corrections. Previously parsed
+fields are not guessed or rewritten: use a listing's refresh action to fetch
+its current source values and replace any earlier incorrect fields.
 
 Tests always use temporary databases and mock external HTTP. Run:
 

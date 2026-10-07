@@ -17,6 +17,7 @@ const state = { data: null, selectedId: null, sort: 'score_desc', compareIds: ne
 let renderVersion = 0;
 let loadVersion = 0;
 const regionCache = {};
+const historyCache = new Map();
 
 const chartRegistry = {};
 function initChart(el) {
@@ -126,7 +127,7 @@ function toast(msg, ok = true) {
   el._t = setTimeout(() => { el.style.opacity = '0'; }, 3200);
 }
 
-async function loadAnalysis() {
+async function loadAnalysis(watchPending = true) {
   const version = ++loadVersion;
   const container = document.getElementById('analysis-container');
   if (container && !state.data) {
@@ -135,6 +136,7 @@ async function loadAnalysis() {
   const data = await Rental.requestJSON('/api/my-list');
   if (version !== loadVersion) return;
   state.data = data;
+  historyCache.clear();
   const pool = state.data.compare_rows || [];
   state.compareIds = new Set([...state.compareIds].filter(id => pool.some(l => l.id === id)));
   localStorage.setItem('compareIds', JSON.stringify([...state.compareIds]));
@@ -142,6 +144,31 @@ async function loadAnalysis() {
     state.selectedId = pool.length ? pool[0].id : null;
   }
   await render();
+  if (version !== loadVersion) return;
+  if (watchPending) for (const id of data.pending_enrichment_ids || []) watchEnrichment(id);
+}
+
+function getPriceHistory(id) {
+  if (historyCache.has(id)) return historyCache.get(id);
+  const pending = Rental.requestJSON(`/api/listings/${id}/price-history`).then(data => data.history);
+  historyCache.set(id, pending);
+  pending.catch(() => {
+    if (historyCache.get(id) === pending) historyCache.delete(id);
+  });
+  return pending;
+}
+
+async function loadReportHistory(id, version) {
+  const el = document.getElementById('chart-price-history');
+  if (!el) return;
+  try {
+    const history = await getPriceHistory(id);
+    if (version !== renderVersion || state.selectedId !== id) return;
+    drawPriceHistory(el, history);
+  } catch (error) {
+    if (version !== renderVersion || state.selectedId !== id) return;
+    chartEmpty(el, '価格履歴を取得できませんでした。物件を選び直すと再試行できます。');
+  }
 }
 
 async function getRegion(regionId) {
@@ -201,6 +228,7 @@ async function render() {
   drawWordCloud(d.feature_cloud);
   drawLayoutPie(d.layout_dist);
   if (pool.length >= 2) drawScatter(d.scatter_data);
+  if (selected && selected.total_score != null) await loadReportHistory(selected.id, version);
 }
 
 function wordCloudHtml(d) {
@@ -372,22 +400,22 @@ function reportHtml(l, region) {
     </div>`;
 
   const amenityChips = AMENITIES.map(([k, label]) =>
-    l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}</span>`).join('');
+    l[k] ? `<span class="chip on">✓ ${label}</span>` : `<span class="chip off">${label}${k === 'pet_allowed' && l[k] == null ? '（未確認）' : ''}</span>`).join('');
 
   const P = (state.data && state.data.prefs) || {};
   const ACHV = [
     ['予算内', !!(l.total_monthly_cost && l.total_monthly_cost <= (P.max_total_monthly_cost || 140000))],
     ['コスパ良', !!(l.total_monthly_cost && l.region_avg_rent && l.region_comparison_cost < l.region_avg_rent)],
     ['広め', !!(l.area_m2 && l.area_m2 >= (P.ideal_area_m2 || 40))],
-    ['築浅', l.building_age != null && l.building_age <= 10],
-    ['駅徒歩10分以内', l.walk_minutes != null && l.walk_minutes <= 10],
-    ['3階以上', l.floor != null && l.floor >= 3],
+    [`築${P.max_building_age ?? 20}年以内`, l.building_age != null && l.building_age <= (P.max_building_age ?? 20)],
+    [`駅徒歩${P.max_walk_minutes ?? 15}分以内`, l.walk_minutes != null && l.walk_minutes <= (P.max_walk_minutes ?? 15)],
+    [`${P.min_floor ?? 2}階以上`, l.floor != null && l.floor >= (P.min_floor ?? 2)],
     ['礼金なし', l.key_money === 0],
     ['敷金なし', l.deposit === 0],
   ];
   const achvOk = ACHV.filter(a => a[1]).length;
   const achievementChips = ACHV.map(([t, ok]) =>
-    ok ? `<span class="chip on">✓ ${t}</span>` : `<span class="chip off">${t}</span>`).join('');
+    ok ? `<span class="chip on">✓ ${esc(t)}</span>` : `<span class="chip off">${esc(t)}</span>`).join('');
 
   const isFav = !!l.fav_status;
   const favBtn = `<button class="btn ${isFav ? 'btn-good' : 'btn-outline'}" id="report-fav" data-id="${l.id}" data-favid="${l.fav_status_id || ''}">
@@ -482,9 +510,7 @@ function reportHtml(l, region) {
     html += `<div class="card"><h2>初期費用の内訳 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">概算</span></h2><div id="chart-initcost" class="chart"></div></div>`;
     if (l.region_avg_rent && l.region_comparison_cost != null)
       html += `<div class="card"><h2>エリア平均との比較</h2><div id="chart-compare-bar" class="chart"></div></div>`;
-    const hist = (state.data.price_history || []).filter(h => h.id === l.id);
-    if (hist.length >= 2)
-      html += `<div class="card"><h2>価格推移 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">再取得の履歴</span></h2><div id="chart-price-history" class="chart"></div></div>`;
+    html += `<div class="card"><h2>価格推移 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">再取得の履歴</span></h2><div id="chart-price-history" class="chart"><div class="chart-empty">価格履歴を読み込み中…</div></div></div>`;
     html += `<div class="card"><h2>推薦理由</h2>
       <div style="background:var(--good-bg);border:1px solid var(--good-border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--good);">
         ${esc(l.score_reason || 'スコア理由がありません')}
@@ -590,28 +616,28 @@ function drawReportCharts(l, region, prefs) {
   } else {
     chartEmpty(bEl, 'エリア平均が取得できていません');
   }
-  const hEl = document.getElementById('chart-price-history');
-  if (hEl) {
-    const hist = (state.data.price_history || []).filter(h => h.id === l.id)
-      .sort((a, b) => (a.checked_at || '').localeCompare(b.checked_at || ''));
-    chartA11y(hEl, hist.length < 2
-      ? '価格推移の折れ線グラフ。まだ履歴が1件のため推移はありません。'
-      : `価格推移の折れ線グラフ。${hist.length}件の記録。` +
-        hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
-    initChart(hEl).setOption({
-      ...BASE_OPT,
-      grid: { left: 60, right: 24, top: 34, bottom: 40 },
-      xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
-      yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
-      series: [{
-        type: 'line', smooth: true, symbolSize: 7,
-        data: hist.map(h => h.total_monthly_cost),
-        itemStyle: { color: COLORS.primary }, lineStyle: { color: COLORS.primary, width: 2 },
-        areaStyle: { color: 'rgba(86,105,110,0.08)' },
-        label: { show: true, formatter: p => (p.value / 10000).toFixed(1) + '万', fontSize: 10, color: COLORS.text },
-      }],
-    });
+}
+
+function drawPriceHistory(hEl, hist) {
+  if (hist.length < 2) {
+    chartEmpty(hEl, hist.length ? '履歴はまだ1件です。価格が変わると推移を表示します。' : '取得済みの価格履歴はありません。');
+    return;
   }
+  chartA11y(hEl, `価格推移の折れ線グラフ。${hist.length}件の記録。` +
+    hist.map(h => `${(h.checked_at || '').slice(0, 10)}は${yen(h.total_monthly_cost)}`).join('、') + '。');
+  initChart(hEl).setOption({
+    ...BASE_OPT,
+    grid: { left: 60, right: 24, top: 34, bottom: 40 },
+    xAxis: { type: 'category', data: hist.map(h => (h.checked_at || '').slice(0, 10)), axisLabel: { color: COLORS.muted, fontSize: 10 } },
+    yAxis: { type: 'value', name: '月額(円)', axisLabel: { color: COLORS.muted, formatter: v => (v / 10000) + '万' } },
+    series: [{
+      type: 'line', smooth: true, symbolSize: 7,
+      data: hist.map(h => h.total_monthly_cost),
+      itemStyle: { color: COLORS.primary }, lineStyle: { color: COLORS.primary, width: 2 },
+      areaStyle: { color: 'rgba(86,105,110,0.08)' },
+      label: { show: true, formatter: p => (p.value / 10000).toFixed(1) + '万', fontSize: 10, color: COLORS.text },
+    }],
+  });
 }
 
 async function refreshListing(id) {
@@ -839,7 +865,7 @@ function watchEnrichment(id) {
         return;
       }
       enrichmentWatchers.delete(id);
-      await loadAnalysis();
+      await loadAnalysis(false);
       setImportMsg(result.status === 'complete' ? '追加情報の取得処理が完了しました。取得できた項目を反映しました。' :
         '追加情報の取得が未完了です。必要に応じて価格を再取得してください。', result.status === 'complete' ? 'ok' : 'error');
     } catch (error) { enrichmentWatchers.delete(id); setImportMsg(error.message, 'error'); }

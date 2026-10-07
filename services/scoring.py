@@ -44,7 +44,9 @@ def score_listing(listing_id, resolve_commute=True):
         if not current or not prefs:
             return False
         if extract_station(current["nearest_station"]) != origin or prefs["target_station"] != destination:
-            minutes = None
+            # The caller queues a new pass after a refresh/preferences change.
+            # This stale lookup must not erase a score already saved for it.
+            return False
         weights = Weights(**{name: prefs[name + "_weight"] for name in Weights.__dataclass_fields__})
         inp = ScoreInput(**{name: current[name] for name in ScoreInput.__dataclass_fields__})
         result = calculate_scores(inp, weights,

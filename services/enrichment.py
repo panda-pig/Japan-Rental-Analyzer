@@ -14,27 +14,35 @@ from scrapers.machimusubi import get_station_review
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rental-enrichment")
 _lock = threading.Lock()
 _jobs = {}
+_rerun = set()
 MAX_PENDING = 32
 
 
 def _run(listing_id):
-    state = "complete"
-    try:
-        score_listing(listing_id)
-        row = query_one("SELECT nearest_station FROM rental_listings WHERE id=?", (listing_id,))
-        if row and row["nearest_station"]:
-            get_station_review(row["nearest_station"], retries=0)
-    except Exception:
-        logging.getLogger(__name__).exception("Enrichment failed for listing %s", listing_id)
-        state = "failed"
-    finally:
+    while True:
+        state = "complete"
+        try:
+            score_listing(listing_id)
+            row = query_one("SELECT nearest_station FROM rental_listings WHERE id=? AND is_active=1", (listing_id,))
+            if row and row["nearest_station"]:
+                get_station_review(row["nearest_station"], retries=0)
+        except Exception:
+            logging.getLogger(__name__).exception("Enrichment failed for listing %s", listing_id)
+            state = "failed"
         with _lock:
+            if listing_id in _rerun:
+                _rerun.remove(listing_id)
+                continue
             _jobs[listing_id] = state
+            return
 
 
 def enqueue(listing_id):
     with _lock:
         if _jobs.get(listing_id) == "pending":
+            # A refresh or preference change happened during the previous pass.
+            # Coalesce repeated requests, but always process the latest inputs.
+            _rerun.add(listing_id)
             return "pending"
         if sum(s == "pending" for s in _jobs.values()) >= MAX_PENDING:
             return "deferred"

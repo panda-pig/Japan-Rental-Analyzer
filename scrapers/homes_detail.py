@@ -28,8 +28,8 @@ def parse_homes_detail(html, detail_url=""):
     if management_fee_raw == "-":
         management_fee_raw = None
 
-    deposit_raw = "0"
-    key_money_raw = "0"
+    deposit_raw = None
+    key_money_raw = None
     dk = kv.get("敷金/礼金", "")
     if dk:
         parts = dk.split("/")
@@ -55,6 +55,9 @@ def parse_homes_detail(html, detail_url=""):
     floor_raw = kv.get("所在階/階数", None)
 
     features = []
+    for key in ("条件", "備考", "設備・サービス", "その他"):
+        if any(word in kv.get(key, "") for word in ("ペット", "犬", "猫")):
+            features.append(kv[key])
     full_text = soup.get_text()
     for kw in ["バストイレ別", "オートロック", "宅配ボックス", "南向き", "エアコン", "2人入居可"]:
         if kw in full_text:

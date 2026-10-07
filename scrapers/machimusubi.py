@@ -19,6 +19,7 @@ import difflib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scrapers.base import fetch_html
+from core.cleaning import parse_station_walk
 from db_helper import query_all, query_one, execute
 
 BASE = "https://www.homes.co.jp"
@@ -55,11 +56,11 @@ def extract_station(raw):
     if not raw:
         return None
     s = str(raw).strip()
+    access = parse_station_walk(s)
+    if access:
+        return access[0]
     if "駅" not in s:
         return normalize_station(s)
-    pairs = re.findall(r"([^/\s線]{1,12}?)駅\s*(?:歩|徒歩)?\s*(\d{1,3})\s*分", s)
-    if pairs:
-        return min(pairs, key=lambda p: int(p[1]))[0]
     m = re.search(r"([^/\s線]{1,12}?)駅", s)
     return m.group(1) if m else normalize_station(s)
 

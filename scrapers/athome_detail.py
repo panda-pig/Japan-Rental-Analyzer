@@ -32,12 +32,8 @@ def parse_athome_detail(html, detail_url=""):
     if management_fee_raw == "-":
         management_fee_raw = None
 
-    deposit_raw = kv.get("敷金", "0")
-    key_money_raw = kv.get("礼金", "0")
-    if deposit_raw == "-":
-        deposit_raw = "0"
-    if key_money_raw == "-":
-        key_money_raw = "0"
+    deposit_raw = kv.get("敷金")
+    key_money_raw = kv.get("礼金")
 
     walk_text = kv.get("交通", None)
     nearest_station = walk_text
@@ -54,6 +50,9 @@ def parse_athome_detail(html, detail_url=""):
     floor_raw = kv.get("所在階", kv.get("所在階/階数", None))
 
     features = []
+    for key in ("条件", "備考", "設備", "その他"):
+        if any(word in kv.get(key, "") for word in ("ペット", "犬", "猫")):
+            features.append(kv[key])
     full_text = soup.get_text()
     for kw in ["バストイレ別", "オートロック", "宅配ボックス", "南向き", "エアコン", "2人入居可"]:
         if kw in full_text:

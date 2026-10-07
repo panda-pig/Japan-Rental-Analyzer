@@ -66,12 +66,28 @@ def parse_area(text):
     return None
 
 
+def parse_station_walk(text):
+    """Return the nearest station and its own walking time as one pair."""
+    if not text:
+        return None
+    s = unicodedata.normalize("NFKC", str(text))
+    pairs = re.findall(r'([^/\s線「」『』"]{1,30}?)(?:[」』"]?駅[」』"]?|[」』"])\s*(?:徒歩|歩)?\s*(\d{1,3})\s*分', s)
+    return min(((name, int(minutes)) for name, minutes in pairs),
+               key=lambda pair: pair[1], default=None)
+
+
 def parse_walk_minutes(text):
     """'徒歩8分' / '歩8分' / '駅徒歩 12分' -> 8"""
     if text is None:
         return None
-    s = str(text).strip()
+    s = unicodedata.normalize("NFKC", str(text)).strip()
     if s == "":
+        return None
+    pair = parse_station_walk(s)
+    if pair:
+        return pair[1]
+    # Bus travel and a walk from the bus stop are not walking time to a station.
+    if "バス" in s or "停歩" in s:
         return None
     m = re.search(r"(\d+)\s*分", s)
     if m:
@@ -141,14 +157,16 @@ FEATURE_FIELDS = [
 
 def parse_pet_allowed(text):
     if text is None:
-        return 0
-    s = str(text)
-    if "不可" in s:
+        return None
+    s = re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(text)))
+    if re.search(r"ペット(?:飼育|相談)?(?:不可|禁止|NG)", s):
         return 0
     for kw in PET_KEYWORDS:
-        if kw in s:
+        if re.search(re.escape(kw) + r"(?!不可|禁止|NG)", s):
             return 1
-    return 0
+    if re.search(r"(?:小型犬|犬|猫)(?:飼育|相談)?(?:不可|禁止|NG)", s):
+        return 0
+    return None
 
 
 def parse_features(items):
