@@ -16,7 +16,7 @@ from core.cleaning import (
 )
 from core.address import parse_address
 from core.initial_cost import estimate_initial_cost
-from core.dedup import generate_listing_hash
+from core.dedup import generate_listing_hash, canonical_listing_url
 
 PARSERS = {
     "SUUMO": parse_suumo,
@@ -56,7 +56,7 @@ def normalize(raw: RawListing, prefs=None):
     h = generate_listing_hash(addr.get("address"), raw.title, raw.layout, area, floor, rent)
     return {
         "platform": raw.platform,
-        "detail_url": raw.detail_url,
+        "detail_url": canonical_listing_url(raw.detail_url),
         "title": raw.title,
         "rent": rent,
         "management_fee": mgmt,
@@ -88,13 +88,53 @@ def normalize(raw: RawListing, prefs=None):
     }
 
 
-def upsert_listing(conn, data):
+SNAPSHOT_FIELDS = {
+    "rent": "家賃", "management_fee": "管理費", "deposit": "敷金", "key_money": "礼金",
+    "area_m2": "面積", "layout": "間取り", "floor": "階数", "total_floors": "建物階数", "building_age": "築年数",
+    "nearest_station": "最寄駅", "walk_minutes": "駅徒歩", "address": "所在地", "pet_allowed": "ペット条件",
+}
+AMENITY_FIELDS = {
+    "bath_toilet_separate": "バストイレ別", "auto_lock": "オートロック", "delivery_box": "宅配ボックス",
+    "south_facing": "南向き", "aircon": "エアコン", "two_person_allowed": "2人入居可",
+}
+
+
+class IncompleteListingError(ValueError):
+    def __init__(self, fields):
+        self.fields = fields
+        labels = {**SNAPSHOT_FIELDS, **AMENITY_FIELDS}
+        super().__init__("今回の取得では「" + "・".join(labels[field] for field in fields) +
+                         "」を確認できませんでした。前回の物件情報と価格履歴を保持しています。")
+
+
+def upsert_listing(conn, data, listing_id=None):
     """Atomically refresh all parsed fields and record observed price changes."""
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
-    cur = conn.execute("SELECT * FROM rental_listings WHERE detail_url=?", (data["detail_url"],))
+    data = {**data, "detail_url": canonical_listing_url(data["detail_url"])}
+    if listing_id is not None:
+        cur = conn.execute("SELECT * FROM rental_listings WHERE id=?", (listing_id,))
+    else:
+        cur = conn.execute("SELECT * FROM rental_listings WHERE detail_url=?", (data["detail_url"],))
     values = cur.fetchone()
     old = dict(zip([c[0] for c in cur.description], values)) if values else None
+    if old is None and listing_id is None:
+        # Older rows may still contain tracking parameters. Reuse their IDs so
+        # favorites and history stay attached; don't delete legacy duplicates.
+        cur = conn.execute("SELECT * FROM rental_listings WHERE platform=? ORDER BY id", (data["platform"],))
+        names = [c[0] for c in cur.description]
+        url_index = names.index("detail_url")
+        old = next((dict(zip(names, row)) for row in cur
+                    if canonical_listing_url(row[url_index]) == data["detail_url"]), None)
+    if listing_id is not None and old is None:
+        raise ValueError("物件が見つかりません")
+    if old:
+        missing = [key for key in SNAPSHOT_FIELDS if old.get(key) not in (None, "") and data.get(key) in (None, "")]
+        # The source parsers only report present amenities; absence of a tag
+        # cannot establish that a previously confirmed amenity was removed.
+        missing += [key for key in AMENITY_FIELDS if old.get(key) == 1 and data.get(key) != 1]
+        if missing:
+            raise IncompleteListingError(missing)
     now = datetime.now().isoformat()
     if old:
         listing_id = old["id"]

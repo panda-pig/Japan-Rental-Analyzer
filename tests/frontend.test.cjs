@@ -15,7 +15,7 @@ function page(name, data = []) {
     document: {
       addEventListener() {}, querySelectorAll: () => [],
       getElementById(id) {
-        if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', style: {}, setAttribute() {} });
+        if (!elements.has(id)) elements.set(id, { id, innerHTML: '', textContent: '', style: {}, setAttribute() {} });
         return elements.get(id);
       },
     },
@@ -175,4 +175,64 @@ test('returning to the report resumes pending enrichment updates', async () => {
   assert.deepEqual(Array.from(p.context.watched), [1]);
   await p.run('loadAnalysis(false)');
   assert.deepEqual(Array.from(p.context.watched), [1]);
+});
+
+test('private GET retries authentication and remembers the token for subsequent reads', async () => {
+  const p = page('favorites.js');
+  const tokens = [];
+  let prompts = 0;
+  p.context.prompt = () => { prompts++; return 'test-admin'; };
+  p.context.fetch = async (url, options) => {
+    const token = options.headers['X-Admin-Token'];
+    tokens.push(token);
+    return { ok: token === 'test-admin', status: token === 'test-admin' ? 200 : 401,
+      json: async () => token === 'test-admin' ? [] : { error: '管理トークンが必要です' } };
+  };
+  await p.context.Rental.requestJSON('/api/status');
+  await p.context.Rental.requestJSON('/api/status');
+  assert.deepEqual(tokens, [undefined, 'test-admin', 'test-admin']);
+  assert.equal(prompts, 1);
+  assert.equal(p.storage.get('adminToken'), 'test-admin');
+});
+
+test('cancelling authentication leaves an explicit error and public reads do not prompt', async () => {
+  const p = page('favorites.js');
+  let prompts = 0;
+  p.context.prompt = () => { prompts++; return null; };
+  p.context.fetch = async url => ({ ok: url === '/api/dashboard', status: url === '/api/dashboard' ? 200 : 401,
+    json: async () => url === '/api/dashboard' ? {} : { error: '管理トークンが必要です' } });
+  await p.context.Rental.requestJSON('/api/dashboard');
+  assert.equal(prompts, 0);
+  await assert.rejects(p.context.Rental.requestJSON('/api/status'), /管理トークンが必要です/);
+  assert.equal(prompts, 1);
+  assert.equal(p.storage.has('adminToken'), false);
+});
+
+test('area charts respect the server comparison flag and omit incomparable rent from the radar', () => {
+  const p = page('dashboard.js');
+  p.run(`
+    globalThis.chartOptions = {};
+    initChart = el => ({setOption: option => chartOptions[el.id] = option});
+    regionData = [
+      {ward:'Fresh',prefecture:'東京都',avg_rent:100000,overall_score:60,rent_comparable:true,safety_score:60,convenience_score:60,environment_score:60},
+      {ward:'Stale',prefecture:'東京都',avg_rent:80000,overall_score:85,rent_layout:'1LDK',rent_fetched_at:'2020-01-01',rent_comparable:false,safety_score:85,convenience_score:85,environment_score:85}
+    ];
+    valueMap();
+    document.getElementById('region-selector-1').value = 'Fresh';
+    document.getElementById('region-selector-2').value = 'Stale';
+    renderRegionRadar();
+  `);
+  assert.deepEqual(Array.from(p.context.chartOptions['chart-value-map'].series[0].data, row => row.name), ['Fresh']);
+  assert.equal(p.context.chartOptions['chart-region-radar'].radar.indicator.length, 3);
+  p.run("document.getElementById('region-selector-2').value = ''; renderRegionRadar()");
+  assert.equal(p.context.chartOptions['chart-region-radar'].radar.indicator.length, 4);
+});
+
+test('area reference table explains excluded benchmarks and escapes the note', () => {
+  const p = page('dashboard.js');
+  const tbody = {innerHTML:''};
+  p.context.document.querySelector = () => tbody;
+  p.run(`regionData = [{ward:'Test',avg_rent:100000,rent_comparable:false,rent_note:'古い相場 <img src=x onerror=bad()>',overall_score:60}]; renderTable()`);
+  assert.ok(tbody.innerHTML.includes('古い相場 &lt;img'));
+  assert.ok(!tbody.innerHTML.includes('<img'));
 });

@@ -22,7 +22,7 @@
   <p class="page-subtitle">まず相場と住みやすさで「狙い目エリア」を絞り込み。気になる物件を見つけたら「物件分析」でURLを貼り付け。</p>
 
   <div class="metric-grid" id="metrics"></div>
-  <p class="page-subtitle">ランキングは間取り・取得日を確認できる1LDKのデータを表示します。旧データ・手動概算は一覧で区別しています。治安・便利・住環境は手動の参考評価です。</p>
+  <p class="page-subtitle">ランキング・狙い目マップは180日以内に取得した管理費別の1LDK相場で比較します。旧データ・手動概算・管理費込みの値は一覧で参考表示します。治安・便利・住環境は手動の参考評価です。</p>
 
   <div class="card">
     <h2>狙い目エリアマップ <span class="sub">相場 × 総合評価 — 左上ほど「安くて評価が高い」</span></h2>
@@ -36,6 +36,7 @@
 
   <div class="card">
     <h2>エリア比較レーダー <span class="sub">安全性・便利度・環境・相場</span></h2>
+    <p class="page-subtitle">比較可能な相場が揃わない場合、家賃の軸は省略します。</p>
     <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
       <select id="region-selector-1" onchange="renderRegionRadar()"></select>
       <select id="region-selector-2" onchange="renderRegionRadar()"></select>

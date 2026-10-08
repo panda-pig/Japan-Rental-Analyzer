@@ -111,8 +111,10 @@ to compare two areas, and a sortable table of all 56 areas.
 
 Fetch targets are restricted to an allow-list matched on the parsed hostname,
 private addresses are refused and redirects are re-checked at every hop.
-Scraped text is escaped before it reaches the DOM. All API write
-endpoints require `ADMIN_TOKEN` when it is set.
+Scraped text is escaped before it reaches the DOM. Personal listing, favorite,
+comparison and settings APIs require `ADMIN_TOKEN` for both reads and writes
+when it is set. Only the region dashboard and region data APIs are public.
+On Render, private APIs refuse access if the token is missing.
 
 The interface targets WCAG 2.1 AA: keyboard-operable tables, text
 alternatives for every chart, live regions for form results, AA contrast, 44px
@@ -128,7 +130,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 #   REINFOLIB_API_KEY   : Real Estate Information Library (optional)
 #   NAVITIME_CLIENT_KEY : commute time (without it the commute axis is skipped)
-#   ADMIN_TOKEN         : required for all API writes when set
+#   ADMIN_TOKEN         : protects private API reads/writes; required on Render
 
 python scripts/init_db.py
 python scripts/seed_regions.py
@@ -139,12 +141,14 @@ python app.py    # http://127.0.0.1:5000
 
 ```bash
 .venv/bin/pytest tests/ -q
+node --test tests/frontend.test.cjs
 ```
 
 Batch scraping is a command-line job, not a route:
 `python scripts/run_scrape.py` works off the rows in `source_configs`.
-When `ADMIN_TOKEN` is set, the pages ask for it once on the first
-write action and remember it in the browser.
+When `ADMIN_TOKEN` is set, the pages ask for it on the first private-data request
+and remember it in the browser. Use your own browser and clear its local storage
+to remove the saved token. The public dashboard contains region data only.
 
 ## Deploying to Render
 
@@ -153,7 +157,7 @@ write action and remember it in the browser.
    start `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4`
 3. Persistent disk 1 GB mounted at `db`
 4. Environment: `DB_PATH=/opt/render/project/src/db/database.db`,
-   `REINFOLIB_API_KEY`, `ADMIN_TOKEN`
+   `REINFOLIB_API_KEY`, a nonempty random `ADMIN_TOKEN`
 5. Once, from the shell:
    `python scripts/fetch_public_data.py && python scripts/fetch_station_reviews.py`
 

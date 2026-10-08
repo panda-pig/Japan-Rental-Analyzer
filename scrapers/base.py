@@ -89,6 +89,8 @@ def fetch_html(url):
                 nxt = urljoin(url, resp.headers.get("Location", ""))
                 if not is_safe_url(nxt):
                     return None
+                if not check_robots_allowed(nxt):
+                    return None
                 url = nxt
                 continue
             resp.raise_for_status()

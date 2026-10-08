@@ -15,8 +15,7 @@
     return response;
   }
   async function requestJSON(url, opts = {}) {
-    const method = (opts.method || 'GET').toUpperCase();
-    const response = await (method === 'GET' ? fetch(url, opts) : adminFetch(url, opts));
+    const response = await adminFetch(url, opts);
     const data = await response.json().catch(() => null);
     if (!response.ok || data == null) throw new Error(data?.error || `通信に失敗しました (HTTP ${response.status})`);
     return data;

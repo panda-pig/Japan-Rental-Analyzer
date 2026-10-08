@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request, render_template
 from db_helper import query_all, query_one, execute
 from core.validation import preferences as validate_preferences, status_fields
-from services.regions import attach_benchmarks
+from services.regions import attach_benchmarks, attach_region_benchmarks
+from scripts.run_scrape import IncompleteListingError
 from werkzeug.exceptions import HTTPException
 import os
 import sys
@@ -74,23 +75,41 @@ def asset_v():
 app.jinja_env.globals["asset_v"] = asset_v
 
 
-# ADMIN_TOKEN を設定した環境でのみ要求する(未設定ならローカル開発として素通し)。
+# Public region data is separate from the private listing pool and preferences.
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+PUBLIC_API_ENDPOINTS = {"api_dashboard", "api_regions", "api_region_detail", "api_region_by_id"}
 
 def _needs_admin():
     return (request.url_rule is not None and request.path.startswith("/api/")
-            and request.method in ("POST", "PUT", "PATCH", "DELETE"))
+            and not (request.method in ("GET", "HEAD", "OPTIONS") and request.endpoint in PUBLIC_API_ENDPOINTS))
 
 
 @app.before_request
 def _guard_admin():
-    if not ADMIN_TOKEN or not _needs_admin():
+    if not _needs_admin():
+        return None
+    if not ADMIN_TOKEN:
+        if os.getenv("RENDER") == "true":
+            return jsonify({"error": "管理トークンが未設定のため、個人データへのアクセスを停止しています。"}), 503
         return None
     import hmac
     sent = request.headers.get("X-Admin-Token", "")
-    if hmac.compare_digest(sent, ADMIN_TOKEN):
+    if hmac.compare_digest(sent.encode('utf-8'), ADMIN_TOKEN.encode('utf-8')):
         return None
     return jsonify({"error": "この操作には管理トークンが必要です。"}), 401
+
+
+@app.after_request
+def _private_cache_control(response):
+    if _needs_admin():
+        response.headers["Cache-Control"] = "private, no-store"
+        response.vary.add("X-Admin-Token")
+    return response
+
+
+@app.errorhandler(IncompleteListingError)
+def _incomplete_listing(error):
+    return jsonify({"error": str(error), "missing_fields": error.fields, "preserved": True}), 422
 
 
 def _json_object():
@@ -189,24 +208,9 @@ def _enrich_region(r):
 
 @app.route("/api/dashboard")
 def api_dashboard():
-    total = query_one("SELECT COUNT(*) AS c FROM rental_listings WHERE is_active=1")["c"]
-    pref = query_one("SELECT * FROM user_preferences WHERE id=1")
-    budget_match = query_one(
-        "SELECT COUNT(*) AS c FROM rental_listings WHERE is_active=1 AND total_monthly_cost <= ?",
-        (pref["max_total_monthly_cost"],))["c"]
-    pet_count = query_one(
-        "SELECT COUNT(*) AS c FROM rental_listings WHERE is_active=1 AND pet_allowed=1")["c"]
-    avg_cost = query_one(
-        "SELECT AVG(total_monthly_cost) AS a FROM rental_listings WHERE is_active=1")["a"] or 0
-    avg_area = query_one(
-        "SELECT AVG(area_m2) AS a FROM rental_listings WHERE is_active=1")["a"] or 0
-    avg_score = query_one(
-        "SELECT AVG(s.total_score) AS a FROM listing_scores s JOIN rental_listings l ON s.listing_id=l.id WHERE l.is_active=1")["a"] or 0
-    fav_count = query_one("SELECT COUNT(*) AS c FROM listing_status")["c"]
-
-    regions = [_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC")]
-    rented = [r for r in regions if r.get("avg_rent") and r.get("rent_layout") == "1LDK"
-              and r.get("rent_fetched_at") and r.get("prefecture") in ("東京都", "神奈川県")]
+    regions = [_enrich_region(r) for r in attach_region_benchmarks(
+        query_all("SELECT * FROM region_stats ORDER BY avg_rent DESC"))]
+    rented = [r for r in regions if r["rent_comparable"] and r.get("prefecture") in ("東京都", "神奈川県")]
     cheapest = min(rented, key=lambda x: x["avg_rent"]) if rented else None
     priciest = max(rented, key=lambda x: x["avg_rent"]) if rented else None
     best_value = max(rented, key=lambda x: x["overall_score"] / x["avg_rent"]) if rented else None
@@ -220,45 +224,19 @@ def api_dashboard():
     tokyo_regions = [{"name": r["ward"], "value": r["avg_rent"]} for r in rented if r["prefecture"] == "東京都"]
     yokohama_regions = [{"name": r["ward"], "value": r["avg_rent"]} for r in rented if r["city"] == "横浜市"]
 
-    user_ward_dist = query_all(
-        "SELECT ward AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 AND ward IS NOT NULL GROUP BY ward ORDER BY value DESC")
-
-    user_scatter = query_all("""SELECT l.area_m2 AS x, l.total_monthly_cost AS y,
-        l.title, l.ward, l.layout
-        FROM rental_listings l
-        WHERE l.is_active=1""")
-
-    platform_dist = query_all(
-        "SELECT platform AS name, COUNT(*) AS value FROM rental_listings WHERE is_active=1 GROUP BY platform")
-
-    price_drop = query_one("""SELECT COUNT(DISTINCT l.id) AS c FROM listing_price_history h
-        JOIN rental_listings l ON h.listing_id=l.id
-        WHERE l.is_active=1 AND h.observation_kind='observed' AND l.total_monthly_cost < h.total_monthly_cost""")["c"]
-
-    status_dist = query_all(
-        "SELECT status AS name, COUNT(*) AS value FROM listing_status GROUP BY status")
-
     return jsonify({
-        "total_listings": total, "budget_match_count": budget_match,
-        "pet_allowed_count": pet_count,
-        "average_total_cost": int(avg_cost), "average_area": round(avg_area, 1),
-        "average_score": round(avg_score, 1),
-        "favorite_count": fav_count, "price_drop_count": price_drop,
         "region_count": len(regions),
         "area_summary": area_summary,
         "regions": regions,
         "tokyo_region_rent": tokyo_regions,
         "yokohama_region_rent": yokohama_regions,
-        "user_ward_distribution": user_ward_dist,
-        "user_scatter": user_scatter,
-        "platform_distribution": platform_dist,
-        "status_distribution": status_dist,
     })
 
 
 @app.route("/api/regions")
 def api_regions():
-    return jsonify([_enrich_region(r) for r in query_all("SELECT * FROM region_stats ORDER BY prefecture, city, ward")])
+    return jsonify([_enrich_region(r) for r in attach_region_benchmarks(
+        query_all("SELECT * FROM region_stats ORDER BY prefecture, city, ward"))])
 
 
 @app.route("/api/regions/<ward>")
@@ -268,7 +246,7 @@ def api_region_detail(ward):
         return jsonify({"error": "not found"}), 404
     if len(rows) != 1:
         return jsonify({"error": "同名の地域があります。地域IDを指定してください"}), 409
-    return jsonify(_enrich_region(rows[0]))
+    return jsonify(_enrich_region(attach_region_benchmarks(rows)[0]))
 
 
 @app.route("/api/regions/id/<int:rid>")
@@ -276,7 +254,7 @@ def api_region_by_id(rid):
     row = query_one("SELECT * FROM region_stats WHERE id=?", (rid,))
     if not row:
         return jsonify({"error": "not found"}), 404
-    return jsonify(_enrich_region(row))
+    return jsonify(_enrich_region(attach_region_benchmarks([row])[0]))
 
 
 @app.route("/api/my-list")
@@ -652,7 +630,7 @@ def api_listing_refresh(lid):
     if not raw.title or not normalized["rent"] or normalized["rent"] < 0:
         return jsonify({"error": "物件情報を解析できませんでした。保存済みデータは変更していません"}), 422
     with transaction(immediate=True) as conn:
-        upsert_listing(conn, normalized)
+        upsert_listing(conn, normalized, listing_id=lid)
     _score_single(lid, resolve_commute=False)
     enrichment = _enqueue_enrichment(lid)
 

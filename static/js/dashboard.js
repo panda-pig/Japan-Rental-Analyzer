@@ -91,8 +91,8 @@ function bar(id, data) {
 
 function valueMap() {
   const el = document.getElementById('chart-value-map'); if (!el) return;
-  const rented = regionData.filter(r => r.avg_rent && r.rent_layout === '1LDK' && r.rent_fetched_at);
-  if (!rented.length) { chartEmpty(el, '間取り・取得日を確認できる相場データはまだありません。既存の参考値は全エリア一覧で確認できます。'); return; }
+  const rented = regionData.filter(r => r.rent_comparable);
+  if (!rented.length) { chartEmpty(el, '180日以内に取得した管理費別の1LDK相場データがありません。参考値は全エリア一覧で確認できます。'); return; }
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
   const best = [...rented].sort((a, b) => (b.overall_score / b.avg_rent) - (a.overall_score / a.avg_rent)).slice(0, 3);
@@ -140,26 +140,27 @@ function radar(id, indicators, seriesData) {
 function renderRegionRadar() {
   const s1 = document.getElementById('region-selector-1').value;
   const s2 = document.getElementById('region-selector-2').value;
+  const selected = [s1, s2].map(sel => regionData.find(r => regionName(r) === sel)).filter(Boolean);
+  const compareRent = selected.length > 0 && selected.every(r => r.rent_comparable);
   const series = [];
-  for (const sel of [s1, s2]) {
-    if (!sel) continue;
-    const r = regionData.find(x => regionName(x) === sel);
-    if (!r) continue;
+  for (const r of selected) {
     const i = series.length;
     series.push({
-      value: [r.safety_score, r.convenience_score, r.environment_score, Math.round((r.avg_rent || 0) / 300000 * 100)],
+      value: [r.safety_score, r.convenience_score, r.environment_score,
+        ...(compareRent ? [Math.round(r.avg_rent / 300000 * 100)] : [])],
       name: regionName(r),
       itemStyle: { color: CHART.palette[i % CHART.palette.length] },
     });
   }
   if (!series.length) { chartEmpty(document.getElementById('chart-region-radar'), 'エリアを選択してください'); return; }
-  const dims = ['安全性', '便利度', '環境', '相場の高さ'];
+  const dims = ['安全性', '便利度', '環境', ...(compareRent ? ['相場の高さ'] : [])];
   radar('chart-region-radar',
     dims.map(name => ({ name, max: 100 })),
     series);
   chartA11y(document.getElementById('chart-region-radar'),
     'エリア比較レーダーチャート。各項目は100点満点。' +
-    series.map(s => `${s.name}は` + dims.map((d, i) => `${d}${s.value[i]}`).join('、')).join('。') + '。');
+    series.map(s => `${s.name}は` + dims.map((d, i) => `${d}${s.value[i]}`).join('、')).join('。') +
+    (compareRent ? '。' : '。比較可能な相場が揃っていないため、家賃の比較は省略しています。'));
 }
 
 function scoreBar(s) {
@@ -188,7 +189,7 @@ function renderTable() {
   tbody.innerHTML = rows.map(r => `<tr>
     <td style="font-weight:600;color:var(--text-primary);">${regionName(r)}</td>
     <td>${r.avg_rent ? man(r.avg_rent) : '-'}</td>
-    <td>${Rental.esc(r.rent_layout || '間取り未確認')}<br>${r.rent_source === 'manual_estimate' ? '手動概算' : /^https:\/\/suumo\.jp\//.test(r.rent_source || '') ? `<a href="${Rental.esc(r.rent_source)}" target="_blank" rel="noopener">SUUMO</a>` : '出典・時点未確認'}<br>${Rental.esc((r.rent_fetched_at || '').slice(0, 10))}</td>
+    <td>${Rental.esc(r.rent_layout || '間取り未確認')}<br>${r.rent_source === 'manual_estimate' ? '手動概算' : /^https:\/\/suumo\.jp\//.test(r.rent_source || '') ? `<a href="${Rental.esc(r.rent_source)}" target="_blank" rel="noopener">SUUMO</a>` : '出典・時点未確認'}<br>${Rental.esc((r.rent_fetched_at || '').slice(0, 10))}<br>${Rental.esc(r.rent_note)}</td>
     <td title="${r.trade_count ? `直近4四半期 ${r.trade_count}件 (中古マンション等, 出典: 不動産情報ライブラリ)` : ''}">${r.trade_price_per_m2 ? man(r.trade_price_per_m2) : '-'}</td>
     <td>${scoreBar(r.overall_score)}</td>
     <td>${levelTag(r.safety_level)}</td>
@@ -237,7 +238,7 @@ async function load() {
   const s = d.area_summary || {};
   document.getElementById('metrics').innerHTML = [
     metricCard(d.region_count ?? 0, 'エリア数', 'accent'),
-    metricCard(s.rent_min && s.rent_max ? `${man(s.rent_min)}〜${man(s.rent_max)}` : '-', '相場レンジ (1LDK)', ''),
+    metricCard(s.rent_min && s.rent_max ? `${man(s.rent_min)}〜${man(s.rent_max)}` : '-', '相場レンジ (1LDK・管理費別)', ''),
     metricCard(s.cheapest ? man(s.cheapest.rent) : '-', '最安エリア', 'good', s.cheapest ? s.cheapest.ward : ''),
     metricCard(s.best_value ? s.best_value.ward : '-', '狙い目エリア', '', s.best_value ? `評価${s.best_value.score} / ${man(s.best_value.rent)}` : ''),
   ].join('');

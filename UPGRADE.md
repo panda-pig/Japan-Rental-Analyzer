@@ -7,8 +7,11 @@
 - Old price history is retained as `legacy` because its timestamps referred to
   the subsequent refresh. Charts use actual observations, starting with the
   latest known price and subsequent refreshes.
-- All API writes require `ADMIN_TOKEN` when it is configured. This includes
-  imports, refreshes, favorites, settings and deletion. Read access is unchanged.
+- Private API reads and all API writes require `ADMIN_TOKEN` when configured.
+  This includes listings, price history, comparisons, favorites and settings.
+  On Render, a missing token returns 503 for private APIs instead of allowing
+  anonymous access. The browser requests the token on first private access.
+  Private responses use `Cache-Control: private, no-store`.
 - Missing deposit/key money is unknown, not zero. Initial-cost totals and that
   score dimension remain unavailable until both amounts are known. Decimal
   month amounts such as `0.5ヶ月` are supported.
@@ -56,6 +59,32 @@ checking pending jobs when reopened.
 No schema migration is required for these corrections. Previously parsed
 fields are not guessed or rewritten: use a listing's refresh action to fetch
 its current source values and replace any earlier incorrect fields.
+
+## Privacy and snapshot integrity
+
+- The public `/api/dashboard` returns only region information. Personal counts,
+  listing distributions and price changes are no longer included. Use the
+  authenticated `/api/my-list` for the personal report.
+- Refreshing or reimporting an existing listing returns 422 with
+  `preserved: true` and `missing_fields` if a previously known field cannot be
+  confirmed. The entire previous snapshot, score and price history are retained.
+  A missing amenity tag cannot establish removal of a confirmed amenity.
+  Explicit zero fees and prohibited pet conditions remain valid updates.
+- New listing URLs drop fragments and common tracking parameters (`utm_*`,
+  `fbclid`, `gclid`, `yclid`, `msclkid`) while preserving identifying parameters
+  and their encoding. Imports also match legacy tracked URLs, preserving IDs,
+  favorites and history. Existing duplicate rows are not deleted or merged;
+  refreshing one always targets the requested ID.
+- The homepage ranking and value map use the same 180-day validity check as
+  reports, on a uniform 1LDK rent excluding management fees. Unknown fee bases,
+  stale dates and future dates beyond five minutes are excluded. Other values
+  remain visible with a reference note; the radar omits rent when its selected
+  regions do not all have comparable benchmarks.
+- Every listing redirect checks the destination's robots.txt before fetching
+  the destination, in addition to hostname and public-IP checks.
+
+These changes require no database migration. Set `ADMIN_TOKEN` in Render before
+deploying, and use the same token when the browser prompts for private access.
 
 Tests always use temporary databases and mock external HTTP. Run:
 
