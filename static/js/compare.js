@@ -1,13 +1,6 @@
-// スクレイプ由来の文字列は innerHTML に直接入れない
-const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
-function safeUrl(u) {
-  if (typeof u !== 'string' || !u.trim()) return '';
-  try {
-    const p = new URL(u, location.origin);
-    return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
-  } catch (e) { return ''; }
-}
+// スクレイプ由来の文字列は common.js の Rental 経由でエスケープする
+const esc = Rental.esc;
+const safeUrl = Rental.safeUrl;
 
 const CHART_FONT = "'Noto Sans JP', sans-serif";
 const PALETTE = ['#56696E', '#5C7A5B', '#A97A2E', '#8C86A0'];

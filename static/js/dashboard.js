@@ -54,9 +54,11 @@ function chartEmpty(el, msg) {
   if (el) el.innerHTML = `<div class="chart-empty">${msg || 'データがありません'}</div>`;
 }
 
+const NO_BENCHMARK = '180日以内に取得した管理費別の1LDK相場データがありません。参考値は全エリア一覧で確認できます。';
+
 function bar(id, data) {
   const el = document.getElementById(id); if (!el) return;
-  if (!data || !data.length) { chartEmpty(el); return; }
+  if (!data || !data.length) { chartEmpty(el, NO_BENCHMARK); return; }
   const sorted = [...data].sort((a, b) => b.value - a.value);
   const hi = sorted[0], lo = sorted[sorted.length - 1];
   chartA11y(el, `相場ランキングの棒グラフ。${data.length}エリア。` +
@@ -92,7 +94,7 @@ function bar(id, data) {
 function valueMap() {
   const el = document.getElementById('chart-value-map'); if (!el) return;
   const rented = regionData.filter(r => r.rent_comparable);
-  if (!rented.length) { chartEmpty(el, '180日以内に取得した管理費別の1LDK相場データがありません。参考値は全エリア一覧で確認できます。'); return; }
+  if (!rented.length) { chartEmpty(el, NO_BENCHMARK); return; }
   const rents = rented.map(r => r.avg_rent).sort((a, b) => a - b);
   const medRent = rents[Math.floor(rents.length / 2)];
   const best = [...rented].sort((a, b) => (b.overall_score / b.avg_rent) - (a.overall_score / a.avg_rent)).slice(0, 3);

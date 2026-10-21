@@ -20,6 +20,14 @@
     if (!response.ok || data == null) throw new Error(data?.error || `通信に失敗しました (HTTP ${response.status})`);
     return data;
   }
+  function safeUrl(value) {
+    // new URL(null, origin) は origin/null に解決してしまうので先に弾く
+    if (typeof value !== 'string' || !value.trim()) return '';
+    try {
+      const url = new URL(value, location.origin);
+      return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+    } catch { return ''; }
+  }
   function readCompareIds() {
     try {
       const value = JSON.parse(localStorage.getItem('compareIds') || '[]');
@@ -30,6 +38,6 @@
     const el = document.getElementById(id);
     if (el) el.innerHTML = `<p role="alert" class="empty-state">${esc(error.message)}<br>ページを再読み込みして再試行してください。</p>`;
   }
-  window.Rental = { esc, adminFetch, requestJSON, readCompareIds, showError,
+  window.Rental = { esc, safeUrl, adminFetch, requestJSON, readCompareIds, showError,
     money: value => value == null ? '未取得' : esc(value.toLocaleString()) + '円' };
 })();

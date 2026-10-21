@@ -236,3 +236,21 @@ test('area reference table explains excluded benchmarks and escapes the note', (
   assert.ok(tbody.innerHTML.includes('古い相場 &lt;img'));
   assert.ok(!tbody.innerHTML.includes('<img'));
 });
+
+test('safeUrl rejects non-strings instead of resolving them against the origin', () => {
+  // new URL(null, origin) resolves to origin/null, so the type guard is what
+  // keeps a missing detail_url from becoming a live link.
+  const p = page('my-list.js');
+  for (const value of ['null', 'undefined', '"   "', '123', '{}', '"javascript:alert(1)"']) {
+    assert.equal(p.run(`safeUrl(${value})`), '', `safeUrl(${value})`);
+  }
+  assert.equal(p.run(`safeUrl('https://suumo.jp/x')`), 'https://suumo.jp/x');
+});
+
+test('every page escapes through the one shared implementation', () => {
+  for (const name of ['my-list.js', 'compare.js', 'favorites.js']) {
+    const p = page(name);
+    assert.equal(p.run('esc === Rental.esc'), true, `${name} esc`);
+    assert.equal(p.run('safeUrl === Rental.safeUrl'), true, `${name} safeUrl`);
+  }
+});

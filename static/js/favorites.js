@@ -1,13 +1,6 @@
-// スクレイプ由来の文字列は innerHTML に直接入れない
-const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ESC[c]);
-function safeUrl(u) {
-  if (typeof u !== 'string' || !u.trim()) return '';
-  try {
-    const p = new URL(u, location.origin);
-    return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : '';
-  } catch (e) { return ''; }
-}
+// スクレイプ由来の文字列は common.js の Rental 経由でエスケープする
+const esc = Rental.esc;
+const safeUrl = Rental.safeUrl;
 
 const STATUSES = ["気になる", "問い合わせ予定", "問い合わせ済み", "内見予定", "内見済み", "申込候補", "申込済み", "見送り", "成約不可"];
 const STATUS_ORDER = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
