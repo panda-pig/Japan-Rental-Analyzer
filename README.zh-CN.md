@@ -141,8 +141,15 @@ python app.py    # http://127.0.0.1:5000
 3. Persistent Disk 1GB，挂载路径 `db`
 4. 环境变量 `DB_PATH=/opt/render/project/src/db/database.db`、
    `REINFOLIB_API_KEY`、`ADMIN_TOKEN`
-5. 部署后在 Shell 里执行一次：
-   `python scripts/fetch_public_data.py && python scripts/fetch_station_reviews.py`
+5. 部署后在 Shell 里执行一次。`seed_regions` 负责填充相场基准，
+   狙い目地图和两个排行榜都基于它绘制，不跑的话首页没有任何内容：
+   ```
+   python scripts/seed_regions.py
+   python scripts/fetch_public_data.py
+   python scripts/fetch_station_reviews.py
+   ```
+   `seed_regions.py` 建议每季度重跑一次：超过 180 天的基准会重新
+   被排除在比较之外。
 
 ## 合规方针
 

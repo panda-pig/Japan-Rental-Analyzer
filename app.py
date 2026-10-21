@@ -18,6 +18,26 @@ dedupe_regions()
 seed_region_catalog()
 
 
+def _warn_if_no_rent_benchmarks():
+    """Nothing on the landing page is drawn from region_stats.avg_rent alone.
+
+    The value map, both rankings and the summary all need a fresh benchmark
+    with a known fee basis, so an instance that never ran seed_regions.py
+    serves an empty landing page with no other signal that anything is wrong.
+    """
+    usable = query_one(
+        "SELECT COUNT(*) AS c FROM region_rent_benchmarks WHERE layout='1LDK'"
+        " AND includes_management_fee IN (0, 1)"
+        " AND fetched_at > datetime('now', '-180 days')")["c"]
+    if not usable:
+        print("WARNING: no usable 1LDK rent benchmarks. The area map, the rent "
+              "rankings and the area summary will be empty. Run "
+              "`python scripts/seed_regions.py` to populate them.", file=sys.stderr)
+
+
+_warn_if_no_rent_benchmarks()
+
+
 _COMPRESSIBLE = ("application/json", "text/css", "application/javascript",
                  "text/javascript", "text/html")
 _MIN_COMPRESS_BYTES = 1024

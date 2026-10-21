@@ -146,8 +146,16 @@ python app.py    # http://127.0.0.1:5000
 3. Persistent Disk 1GB、マウントパス `db`
 4. 環境変数 `DB_PATH=/opt/render/project/src/db/database.db`、
    `REINFOLIB_API_KEY`、`ADMIN_TOKEN`
-5. デプロイ後にShellで一度:
-   `python scripts/fetch_public_data.py && python scripts/fetch_station_reviews.py`
+5. デプロイ後にShellで一度。`seed_regions` が相場ベンチマークを入れます。
+   狙い目マップと2つのランキングはこれを元に描くので、実行しないと
+   トップページに何も出ません:
+   ```
+   python scripts/seed_regions.py
+   python scripts/fetch_public_data.py
+   python scripts/fetch_station_reviews.py
+   ```
+   `seed_regions.py` は四半期ごとに再実行してください。180日を超えた
+   ベンチマークは再び比較対象から外れます。
 
 ## コンプライアンス方針
 

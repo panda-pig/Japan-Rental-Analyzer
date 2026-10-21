@@ -158,8 +158,16 @@ to remove the saved token. The public dashboard contains region data only.
 3. Persistent disk 1 GB mounted at `db`
 4. Environment: `DB_PATH=/opt/render/project/src/db/database.db`,
    `REINFOLIB_API_KEY`, a nonempty random `ADMIN_TOKEN`
-5. Once, from the shell:
-   `python scripts/fetch_public_data.py && python scripts/fetch_station_reviews.py`
+5. Once, from the shell — `seed_regions` is what fills the rent benchmarks
+   the value map and the two rankings are built from, so without it the
+   landing page has nothing to draw:
+   ```
+   python scripts/seed_regions.py
+   python scripts/fetch_public_data.py
+   python scripts/fetch_station_reviews.py
+   ```
+   Re-run `seed_regions.py` about every quarter: a benchmark older than
+   180 days drops out of the comparisons again.
 
 ## Compliance
 
