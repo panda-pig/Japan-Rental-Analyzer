@@ -70,6 +70,12 @@ def parse_rent_benchmarks(html):
         fee_basis = 0
     elif re.search(r"(?:管理費|共益費).{0,30}(?:含む|込み)", text):
         fee_basis = 1
+    elif re.search(r"賃料を元に.{0,24}算出", text):
+        # SUUMO の相場ページは管理費・共益費に一度も触れないかわりに、
+        # 「賃貸物件の賃料を元に…算出しています」と算出根拠を書いている。
+        # 賃料は管理費・共益費と別立てで募集される額なので、これを管理費別とみなす。
+        # この一文が無いページは従来どおり不明のままにする。
+        fee_basis = 0
     rents = {}
     for tr in soup.select("table tr"):
         cells = tr.select("td")

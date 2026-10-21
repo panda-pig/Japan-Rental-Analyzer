@@ -116,3 +116,34 @@ def test_dedupe_is_idempotent(db):
     conn.close()
     assert len(seed.dedupe_regions()) == 1
     assert seed.dedupe_regions() == []
+
+
+def _page(body):
+    return f"<html><body>{body}<table><tr><th>間取り</th><th>家賃相場</th></tr>" \
+           f"<tr><td>1LDK</td><td>28.0 万円</td></tr></table></body></html>"
+
+
+def test_suumo_rent_basis_is_read_from_the_stated_method():
+    """相場ページは管理費に一度も触れないが、算出根拠は書いてある。
+
+    「賃料を元に…算出」とある以上その数字は管理費・共益費と別立ての額なので
+    管理費別(0)として扱う。これが無いと全エリアが比較対象から外れる。
+    """
+    html = _page("このデータは「SUUMO」に登録されている賃貸物件の賃料を元に"
+                 "独自の集計ロジックによって算出しています。")
+    rents, basis = seed.parse_rent_benchmarks(html)
+    assert basis == 0
+    assert rents["1LDK"] == 280000
+
+
+def test_explicit_wording_still_wins_over_the_method_sentence():
+    incl = _page("賃料を元に独自の集計ロジックによって算出しています。"
+                 "なお表示金額は管理費を含む金額です。")
+    assert seed.parse_rent_benchmarks(incl)[1] == 1
+    excl = _page("賃料を元に算出しています。共益費は含まない金額です。")
+    assert seed.parse_rent_benchmarks(excl)[1] == 0
+
+
+def test_basis_stays_unknown_without_any_statement():
+    """根拠が書かれていないページを勝手に管理費別とみなさないこと。"""
+    assert seed.parse_rent_benchmarks(_page("家賃相場の一覧です。"))[1] is None
