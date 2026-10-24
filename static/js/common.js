@@ -10,8 +10,10 @@
     const token = window.prompt('この操作には管理トークンが必要です。');
     if (!token) return response;
     response = await send(token);
-    if (response.ok) localStorage.setItem('adminToken', token);
-    else localStorage.removeItem('adminToken');
+    if (response.status === 401 || response.status === 403) localStorage.removeItem('adminToken');
+    // A validation error happens after authentication; keep the valid token
+    // while allowing requestJSON/the caller to display the operation's error.
+    else if (response.ok || (response.status >= 400 && response.status < 500)) localStorage.setItem('adminToken', token);
     return response;
   }
   async function requestJSON(url, opts = {}) {

@@ -63,6 +63,33 @@ def test_all_detail_parsers_keep_missing_fees_unknown(parser):
     assert data["initial_cost_estimate"] is None
 
 
+@pytest.mark.parametrize("floor_text,floor,points", [
+    ("5階建", None, 3), ("3階/地上5階地下1階建", 3, 10), ("地下1階/地上5階建", -1, 0),
+])
+def test_import_keeps_unit_floor_and_building_height_separate(client, monkeypatch, floor_text, floor, points):
+    from scrapers import base
+    html = suumo_html() + f'<table><tr><th>階建</th><td>{floor_text}</td></tr></table>'
+    monkeypatch.setattr(base, "fetch_html", lambda url: html)
+    result = client.post("/api/import/detail", json={"url": "https://suumo.jp/chintai/floor/"})
+    assert result.status_code == 200
+    row = client.get(f'/api/listings/{result.json["id"]}').json
+    assert (row["floor"], row["total_floors"]) == (floor, 5)
+    score = query_one("SELECT floor_score FROM listing_scores WHERE listing_id=?", (result.json["id"],))
+    assert score["floor_score"] == points
+
+
+def test_mixed_currency_fields_produce_correct_persisted_monthly_cost():
+    raw = RawListing(platform="HOMES", title="Test", detail_url="https://homes.co.jp/chintai/mixed/",
+                     rent_raw="10万円", management_fee_raw="5,000円（敷金10万円）",
+                     deposit_raw="10万円", key_money_raw="0円（更新料10万円）")
+    with transaction() as conn:
+        _, lid = upsert_listing(conn, normalize(raw))
+    score_listing(lid, resolve_commute=False)
+    row = query_one("SELECT rent,management_fee,total_monthly_cost,key_money FROM rental_listings WHERE id=?", (lid,))
+    assert row == {"rent": 100000, "management_fee": 5000, "total_monthly_cost": 105000, "key_money": 0}
+    assert query_one("SELECT total_monthly_cost FROM listing_price_history WHERE listing_id=?", (lid,))["total_monthly_cost"] == 105000
+
+
 @pytest.mark.parametrize("condition,expected,points", [
     ("ペット相談 / 二人入居可", 1, 15), ("楽器不可 ペット相談", 1, 15),
     ("ペット不可", 0, 0), ("ペット相談不可", 0, 0),

@@ -56,19 +56,31 @@ def is_safe_url(url):
 
 
 def check_robots_allowed(url):
-    """检查 url 是否被 robots.txt 允许。"""
-    parsed = urlparse(url)
-    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
-    rp = urllib.robotparser.RobotFileParser()
+    """Check robots rules without allowing its redirects to bypass URL checks."""
     try:
-        resp = requests.get(robots_url, headers={"User-Agent": SCRAPE_USER_AGENT}, timeout=10)
-        if resp.status_code == 200:
-            rp.parse(resp.text.splitlines())
-        else:
-            return True
-    except requests.RequestException:
-        return True
-    return rp.can_fetch(SCRAPE_USER_AGENT, url)
+        parsed = urlparse(url)
+        robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+        for _hop in range(MAX_REDIRECTS + 1):
+            if not is_safe_url(robots_url):
+                return False
+            resp = requests.get(robots_url, headers={"User-Agent": SCRAPE_USER_AGENT},
+                                timeout=10, allow_redirects=False)
+            if resp.status_code in (301, 302, 303, 307, 308):
+                location = resp.headers.get("Location")
+                if not location:
+                    return False
+                robots_url = urljoin(robots_url, location)
+                continue
+            if resp.status_code == 200:
+                rp = urllib.robotparser.RobotFileParser()
+                rp.parse(resp.text.splitlines())
+                return rp.can_fetch(SCRAPE_USER_AGENT, url)
+            # Only an explicitly absent file means no rules. Authentication,
+            # rate limits and server failures do not grant permission to fetch.
+            return resp.status_code in (404, 410)
+    except (requests.RequestException, ValueError):
+        pass
+    return False
 
 
 def fetch_html(url):

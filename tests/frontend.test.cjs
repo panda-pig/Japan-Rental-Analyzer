@@ -195,6 +195,30 @@ test('private GET retries authentication and remembers the token for subsequent 
   assert.equal(p.storage.get('adminToken'), 'test-admin');
 });
 
+test('valid admin token survives a validation error on the retried write', async () => {
+  const p = page('settings.js');
+  let prompts = 0;
+  p.context.prompt = () => { prompts++; return 'test-admin'; };
+  p.context.fetch = async (url, options) => {
+    const authenticated = options.headers['X-Admin-Token'] === 'test-admin';
+    const status = !authenticated ? 401 : options.method === 'PUT' ? 400 : 200;
+    return {ok: status === 200, status, json: async () => ({error:'Invalid budget'})};
+  };
+  await assert.rejects(p.context.Rental.requestJSON('/api/preferences', {method:'PUT'}), /Invalid budget/);
+  await p.context.Rental.requestJSON('/api/preferences');
+  assert.equal(prompts, 1);
+  assert.equal(p.storage.get('adminToken'), 'test-admin');
+});
+
+test('a rejected admin token is not remembered', async () => {
+  const p = page('settings.js');
+  p.storage.set('adminToken', 'expired');
+  p.context.prompt = () => 'wrong';
+  p.context.fetch = async () => ({ok:false, status:401, json:async () => ({error:'Unauthorized'})});
+  await assert.rejects(p.context.Rental.requestJSON('/api/preferences'), /Unauthorized/);
+  assert.equal(p.storage.has('adminToken'), false);
+});
+
 test('cancelling authentication leaves an explicit error and public reads do not prompt', async () => {
   const p = page('favorites.js');
   let prompts = 0;

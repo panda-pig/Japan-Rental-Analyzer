@@ -1,5 +1,6 @@
 import sys
 import os
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.cleaning import (
@@ -60,6 +61,29 @@ def test_parse_floor():
     assert parse_floor("1階") == (1, None)
     assert parse_floor("地下1階") == (-1, None)
     assert parse_floor(None) == (None, None)
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("5階建", (None, 5)), ("地上5階地下1階建", (None, 5)),
+    ("3階/地上5階地下1階建", (3, 5)), ("地上5階地下1階建/3階", (3, 5)),
+    ("地下1階/地上5階建", (-1, 5)), ("３階／５階建", (3, 5)),
+    ("5階建地下1階/3階", (3, 5)), ("地下1階建", (None, None)),
+    ("地上5階 地下1階 / 3階", (3, 5)), ("B1F/5階建", (-1, 5)),
+    ("2-3階/5階建", (2, 5)), ("１２階建", (None, 12)),
+    ("5階建（地下1階）", (None, 5)), ("5階建（地下1階）/3階", (3, 5)),
+    ("地上5階（地下1階）/3階", (3, 5)),
+])
+def test_floor_is_distinct_from_building_height(text, expected):
+    assert parse_floor(text) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("管理費5,000円（敷金10万円）", 5000),
+    ("8,000円 / 家賃12.8万円", 8000), ("１２．８万円（管理費５，０００円）", 128000),
+    ("0円（礼金1万円）", 0), ("16.4万円", 164000), (",円", None),
+])
+def test_money_uses_the_matched_amount_unit(text, expected):
+    assert parse_money(text) == expected
 
 def test_parse_building_age():
     assert parse_building_age("築12年") == 12

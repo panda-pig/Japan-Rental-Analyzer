@@ -86,6 +86,27 @@ its current source values and replace any earlier incorrect fields.
 These changes require no database migration. Set `ADMIN_TOKEN` in Render before
 deploying, and use the same token when the browser prompts for private access.
 
+## Field parsing and request reliability
+
+- Money conversion now uses the unit attached to the matched amount. A value
+  such as `5,000円（敷金10万円）` stays 5,000 yen instead of being multiplied by
+  another field's `万`. Malformed text without an amount stays unknown.
+- Unit floors and building heights are parsed independently. `5階建` means
+  the unit floor is unknown, and a building basement no longer overrides an
+  explicit unit floor. Full-width notation, `B1F` and floor ranges are supported;
+  ranges use the lowest occupied floor for scoring.
+- robots.txt redirects are checked for allowed hosts and public destination
+  addresses before each request, with a bounded redirect count. Timeouts,
+  authentication failures, rate limits and server errors stop the listing fetch.
+  Only an explicit 404 or 410 is treated as an absent rules file.
+- A valid management token remains saved when an authenticated operation returns
+  an ordinary validation error. The operation's error is still shown; rejected
+  tokens are removed.
+
+No database migration is required. These parsing changes apply to new imports
+and complete refreshes. Previously saved fields are not guessed or rewritten;
+incomplete source pages still preserve the previous snapshot.
+
 Tests always use temporary databases and mock external HTTP. Run:
 
 ```sh

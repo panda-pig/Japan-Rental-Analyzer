@@ -20,16 +20,13 @@ def parse_money(text):
         return 0
     if re.fullmatch(r"\d+", s):
         return int(s)
-    m = re.search(r"([\d,]+\.?\d*)\s*万?円", s)
+    m = re.search(r"(\d[\d,]*(?:\.\d+)?)\s*(万)?\s*円", s)
     if m:
         num_str = m.group(1).replace(",", "")
         val = Decimal(num_str)
-        if "万" in s:
+        if m.group(2):
             val *= 10000
         return int(val)
-    m = re.search(r"([\d,]+)\s*円", s)
-    if m:
-        return int(m.group(1).replace(",", ""))
     return None
 
 
@@ -96,25 +93,32 @@ def parse_walk_minutes(text):
 
 
 def parse_floor(text):
-    """'3階/5階建' -> (3, 5), '地下1階' -> (-1, None)"""
+    """Return unit floor and above-ground building height independently."""
     if text is None:
         return (None, None)
-    s = str(text).strip()
+    s = unicodedata.normalize("NFKC", str(text)).strip()
     if s == "":
         return (None, None)
-    floor = None
     total = None
-    m = re.search(r"地下(\d+)\s*階", s)
-    if m:
-        floor = -int(m.group(1))
-    else:
-        m = re.search(r"(\d+)\s*階", s)
-        if m:
-            floor = int(m.group(1))
-    m = re.search(r"(\d+)\s*階建", s)
-    if m:
-        total = int(m.group(1))
-    return (floor, total)
+
+    def building(match):
+        nonlocal total
+        if match.group(1) != "地下":
+            total = int(match.group(2))
+        return " "
+
+    # Remove the whole building description, including its basement, before
+    # reading the unit floor. Its order relative to the unit varies by source.
+    basement = r"(?:\s*[,、・]?\s*\(?\s*地下\s*\d+\s*階\s*\)?)?"
+    s = re.sub(r"(地上|地下)?\s*(\d+)\s*階" + basement + r"\s*建(?:て)?" + basement, building, s)
+    s = re.sub(r"(地上)\s*(\d+)\s*階" + basement, building, s)
+    m = re.search(r"(地下|B)?\s*(\d+)(?:\s*[-~〜]\s*(\d+))?\s*(?:階|F)", s, re.I)
+    if not m:
+        return (None, total)
+    floors = [int(value) for value in (m.group(2), m.group(3)) if value is not None]
+    if m.group(1):
+        floors = [-value for value in floors]
+    return (min(floors), total)
 
 
 def parse_building_age(text):
