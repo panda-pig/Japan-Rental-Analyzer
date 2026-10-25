@@ -38,14 +38,23 @@ async function load() {
 
 function collect() {
   const v = id => document.getElementById(id).value;
-  const data = {
-    max_total_monthly_cost: +v("p_max_cost"), min_area_m2: +v("p_min_area"),
-    ideal_area_m2: +v("p_ideal_area"), min_floor: +v("p_min_floor"),
-    max_walk_minutes: +v("p_max_walk"), max_building_age: +v("p_max_age"),
-    target_station: v("p_target_station"), broker_fee_rate: +v("p_broker"),
-    prepaid_rent_months: +v("p_prepaid"), misc_cost: +v("p_misc"),
+  const number = id => {
+    const input = document.getElementById(id);
+    const value = input.value.trim();
+    if (!value || !Number.isFinite(Number(value))) {
+      input.focus();
+      throw new Error(`${input.labels?.[0]?.textContent || '数値項目'}を入力してください。0の場合も明示してください。`);
+    }
+    return Number(value);
   };
-  for (const [k] of WEIGHT_FIELDS) data[k] = +document.getElementById("w_" + k).value;
+  const data = {
+    max_total_monthly_cost: number("p_max_cost"), min_area_m2: number("p_min_area"),
+    ideal_area_m2: number("p_ideal_area"), min_floor: number("p_min_floor"),
+    max_walk_minutes: number("p_max_walk"), max_building_age: number("p_max_age"),
+    target_station: v("p_target_station"), broker_fee_rate: number("p_broker"),
+    prepaid_rent_months: number("p_prepaid"), misc_cost: number("p_misc"),
+  };
+  for (const [k] of WEIGHT_FIELDS) data[k] = number("w_" + k);
   return data;
 }
 

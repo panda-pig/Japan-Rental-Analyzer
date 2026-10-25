@@ -8,7 +8,7 @@ from core.cleaning import (
     parse_floor, parse_building_age, parse_pet_allowed, parse_features,
 )
 from core.address import parse_address
-from core.initial_cost import estimate_initial_cost
+from core.initial_cost import estimate_initial_cost, initial_cost_breakdown
 from core.dedup import generate_listing_hash
 
 
@@ -209,6 +209,25 @@ def test_initial_custom():
         broker_fee_rate=0.5, prepaid_rent_months=0, misc_cost=20000,
     )
     assert r == 70000
+
+
+@pytest.mark.parametrize("rent,rate,months,broker,prepaid", [
+    (50000, 0.29, 0, 14500, 0),
+    (100001, 0.55, 0.5, 55000, 50000),
+    (50000, 0, 0.29, 0, 14500),
+    (100001, 0, 0, 0, 0),
+])
+def test_initial_components_use_decimal_yen(rent, rate, months, broker, prepaid):
+    parts = initial_cost_breakdown(rent, 5000, 0, rate, months, 1)
+    assert parts == {"deposit": 5000, "key_money": 0, "broker_fee": broker,
+                     "prepaid_rent": prepaid, "misc_cost": 1}
+    assert estimate_initial_cost(rent, 5000, 0, rate, months, 1) == sum(parts.values())
+
+
+@pytest.mark.parametrize("rent,deposit,key_money", [(None, 0, 0), (100000, None, 0), (100000, 0, None)])
+def test_initial_components_keep_missing_amounts_unknown(rent, deposit, key_money):
+    assert initial_cost_breakdown(rent, deposit, key_money) is None
+    assert estimate_initial_cost(rent, deposit, key_money) is None
 
 
 def test_hash_stable():

@@ -559,19 +559,13 @@ function drawReportCharts(l, region, prefs) {
     });
   }
   const iEl = document.getElementById('chart-initcost');
-  if (iEl && l.initial_cost_estimate == null) {
+  if (iEl && (l.initial_cost_estimate == null || !l.initial_cost_breakdown)) {
     chartEmpty(iEl, '敷金・礼金などが未取得のため、概算合計は計算できません');
   } else if (iEl) {
-    const p = prefs || { broker_fee_rate: 0.55, prepaid_rent_months: 1, misc_cost: 40000 };
-    const rent = l.rent || 0;
-    const parts = [
-      { name: '敷金', value: l.deposit || 0 },
-      { name: '礼金', value: l.key_money || 0 },
-      { name: '仲介手数料', value: Math.round(rent * p.broker_fee_rate) },
-      { name: '前家賃', value: Math.round(rent * p.prepaid_rent_months) },
-      { name: '諸費用', value: p.misc_cost || 0 },
-    ].filter(x => x.value > 0);
-    const total = parts.reduce((s, x) => s + x.value, 0);
+    const labels = {deposit: '敷金', key_money: '礼金', broker_fee: '仲介手数料', prepaid_rent: '前家賃', misc_cost: '諸費用'};
+    const parts = Object.entries(labels).map(([key, name]) => ({name, value: l.initial_cost_breakdown[key]}))
+      .filter(x => x.value > 0);
+    const total = l.initial_cost_estimate;
     chartA11y(iEl, `初期費用の内訳(ドーナツグラフ)。概算合計${yen(total)}。` +
       parts.map(x => `${x.name}${yen(x.value)}`).join('、') + '。');
     initChart(iEl).setOption({

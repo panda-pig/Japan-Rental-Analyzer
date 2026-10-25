@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template
 from db_helper import query_all, query_one, execute
 from core.validation import preferences as validate_preferences, status_fields
+from core.initial_cost import initial_cost_breakdown
 from services.regions import attach_benchmarks, attach_region_benchmarks
 from scripts.run_scrape import IncompleteListingError
 from werkzeug.exceptions import HTTPException
@@ -277,6 +278,18 @@ def api_region_by_id(rid):
     return jsonify(_enrich_region(attach_region_benchmarks([row])[0]))
 
 
+def _attach_initial_costs(listings, pref=None):
+    """Keep every report's total and components on the same current settings."""
+    if pref is None:
+        pref = query_one("SELECT * FROM user_preferences WHERE id=1")
+    coefficients = {key: pref[key] for key in ("broker_fee_rate", "prepaid_rent_months", "misc_cost")} if pref else {}
+    for listing in listings:
+        parts = initial_cost_breakdown(listing.get("rent"), listing.get("deposit"), listing.get("key_money"), **coefficients)
+        listing.update(initial_cost_breakdown=parts,
+                       initial_cost_estimate=sum(parts.values()) if parts is not None else None)
+    return listings
+
+
 @app.route("/api/my-list")
 def api_my_list():
     """我的关注分析:导入房源 + 区域基准对比 + 雷达数据 + 价格历史 + 状态进度。"""
@@ -293,6 +306,7 @@ def api_my_list():
         WHERE l.is_active=1 ORDER BY s.total_score DESC""")
 
     attach_benchmarks(listings)
+    _attach_initial_costs(listings, pref)
     from scrapers.machimusubi import extract_station
     st_keys = {l["id"]: extract_station(l.get("nearest_station")) for l in listings}
     uniq_sts = sorted({k for k in st_keys.values() if k})
@@ -343,6 +357,7 @@ def api_my_list():
         "region_id": l.get("region_id"), "total_monthly_cost": l.get("total_monthly_cost"),
         "rent": l.get("rent"), "management_fee": l.get("management_fee"),
         "initial_cost_estimate": l.get("initial_cost_estimate"),
+        "initial_cost_breakdown": l.get("initial_cost_breakdown"),
         "area_m2": l.get("area_m2"), "price_per_m2": l.get("price_per_m2"),
         "layout": l.get("layout"), "floor": l.get("floor"),
         "nearest_station": l.get("nearest_station"),
@@ -479,7 +494,7 @@ def api_listing_detail(lid):
         WHERE l.id=?""", (lid,))
     if not row:
         return jsonify({"error": "not found"}), 404
-    return jsonify(row)
+    return jsonify(_attach_initial_costs([row])[0])
 
 
 @app.route("/api/listings/<int:lid>/price-history")
@@ -553,7 +568,7 @@ def api_compare():
     from scrapers.machimusubi import extract_station
     for r in rows:
         r["station_name"] = extract_station(r.get("nearest_station"))
-    return jsonify(rows)
+    return jsonify(_attach_initial_costs(rows))
 
 
 @app.route("/api/pool/clear", methods=["POST"])

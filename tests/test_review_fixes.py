@@ -33,6 +33,39 @@ def listing():
     return lid
 
 
+@pytest.mark.parametrize("deposit,key_money,rate,months,misc,total", [
+    (0, 0, 0.55, 0.5, 1, 105001),
+    (0, 0, 0, 0, 0, 0),
+    (None, 0, 0.55, 1, 40000, None),
+    (0, None, 0.55, 1, 40000, None),
+])
+def test_initial_cost_agrees_across_reports_after_settings_change(
+        client, listing, monkeypatch, deposit, key_money, rate, months, misc, total):
+    import app
+    monkeypatch.setattr(app, "_enqueue_enrichment", lambda *a, **k: None)
+    execute("UPDATE rental_listings SET rent=100001, deposit=?, key_money=? WHERE id=?",
+            (deposit, key_money, listing))
+    response = client.put("/api/preferences", json={
+        "broker_fee_rate": rate, "prepaid_rent_months": months, "misc_cost": misc})
+    assert response.status_code == 200
+    assert query_one("SELECT initial_cost_estimate FROM rental_listings WHERE id=?", (listing,))["initial_cost_estimate"] == total
+
+    # Old persisted estimates must not disagree with the current chart values.
+    execute("UPDATE rental_listings SET initial_cost_estimate=999 WHERE id=?", (listing,))
+    detail = client.get(f"/api/listings/{listing}").json
+    compare = client.get(f"/api/compare?ids={listing}").json[0]
+    report = client.get("/api/my-list").json["compare_rows"][0]
+    for row in (detail, compare, report):
+        assert row["initial_cost_estimate"] == total
+        if total is None:
+            assert row["initial_cost_breakdown"] is None
+        else:
+            assert row["initial_cost_breakdown"] == detail["initial_cost_breakdown"]
+            assert sum(row["initial_cost_breakdown"].values()) == total
+            assert row["initial_cost_breakdown"]["broker_fee"] == (55000 if rate else 0)
+    assert query_one("SELECT initial_cost_estimate FROM rental_listings WHERE id=?", (listing,))["initial_cost_estimate"] == 999
+
+
 @pytest.mark.parametrize("notes,deposit,key_money", [
     ("", None, None), ("敷金: - 礼金: ―", None, None),
     ("敷金: 0.5ヶ月 礼金: 1ヶ月", 50000, 100000),

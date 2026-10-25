@@ -15,7 +15,8 @@ function page(name, data = []) {
     document: {
       addEventListener() {}, querySelectorAll: () => [],
       getElementById(id) {
-        if (!elements.has(id)) elements.set(id, { id, innerHTML: '', textContent: '', style: {}, setAttribute() {} });
+        if (!elements.has(id)) elements.set(id, { id, innerHTML: '', textContent: '', style: {}, setAttribute() {},
+          focus() { this.focused = true; }, remove() { this.removed = true; } });
         return elements.get(id);
       },
     },
@@ -277,4 +278,125 @@ test('every page escapes through the one shared implementation', () => {
     assert.equal(p.run('esc === Rental.esc'), true, `${name} esc`);
     assert.equal(p.run('safeUrl === Rental.safeUrl'), true, `${name} safeUrl`);
   }
+});
+
+test('favorite edits are saved in order even when the first request is slow', async () => {
+  const p = page('favorites.js');
+  p.run(`
+    saveMessage = () => {};
+    globalThis.calls = []; globalThis.releases = []; globalThis.savedMemo = '';
+    Rental.requestJSON = (url, options) => new Promise(resolve => {
+      const body = JSON.parse(options.body); calls.push(body.memo);
+      releases.push(() => { savedMemo = body.memo; resolve({ok:true}); });
+    });
+    globalThis.first = updateField(1, 'memo', 'first draft');
+    globalThis.second = updateField(1, 'memo', 'latest draft');
+  `);
+  await new Promise(setImmediate);
+  assert.deepEqual(Array.from(p.context.calls), ['first draft']);
+  p.run('releases[0]()');
+  await p.context.first;
+  await new Promise(setImmediate);
+  assert.deepEqual(Array.from(p.context.calls), ['first draft', 'latest draft']);
+  p.run('releases[1]()');
+  await p.context.second;
+  assert.equal(p.context.savedMemo, 'latest draft');
+});
+
+test('saving favorite status does not rebuild and discard another unfinished memo', async () => {
+  const p = page('favorites.js', [{id:1,title:'Home',status:'気になる',memo:'saved'}]);
+  await p.run('load()');
+  p.elements.get('fav-list').innerHTML = 'live editors with unsaved text';
+  p.run('Rental.requestJSON = async () => ({ok:true})');
+  await p.run("updateField(1, 'status', '内見予定')");
+  assert.equal(p.elements.get('fav-list').innerHTML, 'live editors with unsaved text');
+  assert.equal(p.elements.get('fav-viewing-1').style.display, 'block');
+  assert.match(p.elements.get('fav-summary').innerHTML, /進行中/);
+});
+
+test('favorite delete waits for queued writes and keeps other editors intact', async () => {
+  const p = page('favorites.js', [{id:1,status:'気になる'}, {id:2,status:'気になる'}]);
+  await p.run('load()');
+  p.elements.get('fav-list').innerHTML = 'other editor has a draft';
+  p.context.confirm = () => true;
+  p.run(`
+    globalThis.methods = [];
+    Rental.requestJSON = async (url, options) => {
+      methods.push(options.method);
+      if (options.method === 'PUT') await new Promise(resolve => { globalThis.release = resolve; });
+      return {ok:true};
+    };
+    globalThis.savingMemo = updateField(1, 'memo', 'latest');
+    globalThis.removing = removeFav(1);
+  `);
+  await new Promise(setImmediate);
+  assert.deepEqual(Array.from(p.context.methods), ['PUT']);
+  p.run('release()');
+  await Promise.all([p.context.savingMemo,p.context.removing]);
+  assert.deepEqual(Array.from(p.context.methods), ['PUT','DELETE']);
+  assert.equal(p.elements.get('fav-card-1').removed, true);
+  assert.equal(p.elements.get('fav-list').innerHTML, 'other editor has a draft');
+});
+
+test('a failed favorite write can be retried without dropping the queue', async () => {
+  const p = page('favorites.js');
+  p.run(`
+    Rental.requestJSON = async () => {throw new Error('temporary failure')};
+  `);
+  await p.run("updateField(1, 'memo', 'draft')");
+  assert.match(p.elements.get('fav-save-msg').textContent, /temporary failure/);
+  p.run('Rental.requestJSON = async () => ({ok:true})');
+  await p.run("updateField(1, 'memo', 'draft')");
+  assert.equal(p.elements.get('fav-save-msg').textContent, '保存しました');
+});
+
+test('late favorite list reads cannot replace edits made while loading', async () => {
+  const p = page('favorites.js');
+  p.run(`
+    Rental.requestJSON = (url, options) => options ? Promise.resolve({ok:true}) :
+      new Promise(resolve => {globalThis.finishLoad = resolve});
+    globalThis.loading = load();
+  `);
+  p.context.document.getElementById('fav-list').innerHTML = 'current editor';
+  await p.run("updateField(1, 'memo', 'new value')");
+  p.run("finishLoad([{id:1,memo:'stale value'}])");
+  await p.context.loading;
+  assert.equal(p.elements.get('fav-list').innerHTML, 'current editor');
+});
+
+test('blank settings never silently become zero, while explicit zero remains valid', async () => {
+  const p = page('settings.js');
+  p.run(`
+    for (const id of ['p_max_cost','p_min_area','p_ideal_area','p_min_floor','p_max_walk','p_max_age','p_broker','p_prepaid','p_misc'])
+      document.getElementById(id).value = '1';
+    document.getElementById('p_target_station').value = '';
+    for (const [key] of WEIGHT_FIELDS) document.getElementById('w_' + key).value = '1';
+    globalThis.writes = 0;
+    Rental.requestJSON = async () => {writes++; return {ok:true}};
+  `);
+  for (const id of ['p_broker','p_misc','p_min_floor','w_pet_weight']) {
+    p.context.document.getElementById(id).value = ' ';
+    await assert.rejects(p.run('persist()'), /入力してください/);
+    assert.equal(p.context.writes, 0);
+    assert.equal(p.elements.get(id).focused, true);
+    p.elements.get(id).value = '0';
+  }
+  await p.run('persist()');
+  assert.equal(p.context.writes, 1);
+  assert.equal(p.run('collect().broker_fee_rate'), 0);
+  assert.equal(p.run('collect().target_station'), '');
+});
+
+test('initial-cost chart uses server components instead of rounding the rent again', () => {
+  const p = page('my-list.js');
+  p.run(`
+    globalThis.charts = {};
+    initChart = el => ({setOption: option => charts[el.id] = option});
+    drawReportCharts({total_score:80,rent:100001,deposit:0,key_money:0,initial_cost_estimate:55000,
+      initial_cost_breakdown:{deposit:0,key_money:0,broker_fee:55000,prepaid_rent:0,misc_cost:0}}, null,
+      {broker_fee_rate:0.55,prepaid_rent_months:0,misc_cost:0});
+  `);
+  const data = p.context.charts['chart-initcost'].series[0].data;
+  assert.equal(data.reduce((sum,item) => sum+item.value,0), 55000);
+  assert.equal(data[0].name, '仲介手数料');
 });

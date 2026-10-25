@@ -107,6 +107,25 @@ No database migration is required. These parsing changes apply to new imports
 and complete refreshes. Previously saved fields are not guessed or rewritten;
 incomplete source pages still preserve the previous snapshot.
 
+## Cost totals and editing reliability
+
+- Initial-cost estimates use decimal arithmetic and truncate each calculated
+  component to integer yen. For example, 50,000 yen at a 0.29 brokerage rate
+  yields 14,500 yen. The report chart consumes the server's components instead
+  of independently rounding them. Detail, comparison and personal-report APIs
+  derive the total from the same current preferences, including for older rows.
+  Unknown deposits or key money remain unknown; explicit zero amounts stay zero.
+- Favorites save changes in order for each listing. Status updates and deletions
+  preserve the other cards' drafts and focus. Deletion waits for pending saves,
+  and failed fields remain marked as unsaved until successfully retried.
+- Numeric settings must contain an explicit number before saving. A blank input
+  is no longer silently treated as zero; an explicit zero remains valid where
+  allowed. The destination station can still be left blank.
+
+No database migration is required. Saved cost estimates are updated on refresh
+or score recalculation; report reads derive the current total without modifying
+the stored listing.
+
 Tests always use temporary databases and mock external HTTP. Run:
 
 ```sh
